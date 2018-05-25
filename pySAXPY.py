@@ -6,7 +6,7 @@ import numpy as np
 start = cuda.Event()
 end = cuda.Event()
 
-n = np.int32(1e6)
+n = np.int32(1e8)
 a = np.float32(2)
 
 x = np.ones(n, dtype=np.float32)
@@ -47,9 +47,14 @@ dim = (1024, 1, 1)
 
 start.record()
 
-func = mod.get_function("saxpy")
-func.prepare(
-func(n, a, x_gpu, y_gpu, block=dim)
+saxpy = mod.get_function("saxpy")
+saxpy.prepare("ifPP")
+saxpy.prepared_call((1,1), dim, n, a, x_gpu, y_gpu)
+
+# WITHOUT USING A PREPARED CALL (no noticable speedup here)
+#saxpy(n, a, x_gpu, y_gpu, block=dim)
+
+
 
 end.record()
 end.synchronize()
