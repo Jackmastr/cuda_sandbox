@@ -24,7 +24,7 @@ float maxError(float *a, int n)
 int main(int argc, char **argv)
 {
 	const int blockSize = 256, nStreams = 4;
-	const int n = 4 * 1024 * blockSize * nStreams;
+	const int n = 256 * 1024 * blockSize * nStreams;
 	const int streamSize = n / nStreams; // How many go into each stream
 	const int streamBytes = streamSize * sizeof(float); // Num bytes for each stream
 	const int bytes = n * sizeof(float); // Total num bytes for all n
@@ -86,5 +86,36 @@ int main(int argc, char **argv)
 	printf("Time for aysnc V1 transfer and execute: %f ms\n", ms);
 	printf("Max error: %e\n", maxError(a, n));
 	
+	// Asynchronous version 2: loop over all copy, all kernel, all copy
 
+	memset(a, 0, bytes);
+	cudaEventRecord(startEvent, 0);
+	for (int i = 0; i < nStreams; ++i)
+	{
+		int offset = i * streamSize;
+		cudaMemcpyAsync(&d_a[offset], &a[offset], streamBytes, cudaMemcpyHostToDevice, stream[i]);
+	}
+
+	for (int i = 0; i < nStreams; ++i)
+	{
+		int offset = i * streamSize;
+		kernel<<<streamSize/blockSize, blockSize, 0, stream[i]>>>(d_a, offset);
+	}
+	
+	for (int i = 0; i < nStreams; ++i)
+	{
+		int offset = i * streamSize;
+		cudaMemcpyAsync(&a[offset], &d_a[offset], streamBytes, cudaMemcpyDeviceToHost, stream[i]);
+	}
+
+	cudaEventRecord(stopEvent, 0);
+	cudaEventSynchronize(stopEvent);
+	cudaEventElapsedTime(&ms, startEvent, stopEvent);
+
+	printf("Time for async V2 transfer and execute: %f ms\n", ms);
+	printf("Max error: %e\n", maxError(a, n));
+
+
+	cudaFree(d_a);
+	cudaFreeHost(a);
 }
