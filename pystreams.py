@@ -12,7 +12,7 @@ code = """
 	#include <math.h>
 	__global__ void kernel(float *a, int offset)
 	{		
-		int i = threadIdx.x;
+		int i = threadIdx.x + blockIdx.x * blockDim.x;
 		float x = (float)i;
 		float s = sinf(x);
 		float c = cosf(x);
@@ -26,9 +26,9 @@ kernel = mod.get_function("kernel")
 
 # Useful variables for how to allocate work to each stream
 
-blockSize = 256
+blockSize = 1024
 nStreams = 2
-n = 256 * 1024 * blockSize * nStreams
+n = 2 * 1024 * blockSize * nStreams
 streamSize = n / nStreams;
 streamBytes = streamSize * (32 / 8) # np.float32
 bytes = n * 4 # 32/8
@@ -51,6 +51,7 @@ for i in range(nStreams):
 
 for i in range(nStreams):
 	offset = np.int32(i * streamSize)
+	print offset
 	#cuda.memcpy_htod(a_gpu[i], a[i])
 	events[i]["start"].record(streams[i])
 	kernel(a_gpu[i], offset, block=(blockSize, 1, 1), stream=streams[i])
@@ -63,5 +64,6 @@ for i in range(nStreams):
 	cuda.memcpy_dtoh(a[i], a_gpu[i])
 
 a = np.asarray(a)
-a.flatten()
-print np.max(np.abs(1.0-a))
+a = a.flatten()[1]
+print a
+print np.where(a == 0)
