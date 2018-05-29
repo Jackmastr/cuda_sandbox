@@ -24,9 +24,12 @@ N = np.int32(1e8)
 nStreams = 2
 streamSize = np.int32(N/nStreams)
 
-x = [np.ones(N, dtype=np.float32)]
-x_gpu = [cuda.mem_alloc(x[0].nbytes)]
-cuda.memcpy_htod(x_gpu[0], x[0])
+x = [None]*nStreams
+x_gpu = [None]*nStreams
+for i in range(nStreams):
+	x[i] = np.ones(streamSize, dtype=np.float32)
+	x_gpu[i] = cuda.mem_alloc(x[i].nbytes)
+	cuda.memcpy_htod(x_gpu[i], x[i])
 
 #cuda.memcpy_htod(x_gpu, x)
 
@@ -36,15 +39,19 @@ for i in range(nStreams):
 
 
 for i in range(nStreams):
-	
 	start = np.int32(i*streamSize)
 	stop = np.int32((i+1)*streamSize)
-	add_one(stop, start, x_gpu[0], block=(1024, 1, 1), stream=stream[i])
+	add_one(stop, start, x_gpu[i], block=(1024, 1, 1), stream=stream[i])
 
-ans = [np.empty_like(x[0])]
-cuda.memcpy_dtoh(ans[0], x_gpu[0])
-print ans[0]
-print np.where(ans[0] == 1)
+
+ans = [None]*nStreams
+for i in range(nStreams):
+	ans[i] = np.empty_like(x[i])
+	print i
+	cuda.memcpy_dtoh(ans[i], x_gpu[i])
+ans = (np.asarray(ans)).flatten()
+
+print np.where(ans == 1)
 
 e.record()
 print s.time_till(e)
