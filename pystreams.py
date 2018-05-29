@@ -33,23 +33,30 @@ streamBytes = streamSize * (32 / 8) # np.float32
 bytes = n * 4 # 32/8
 
 # init array A on both host and device
-a = np.zeros(4)
-a_gpu = np.empty(4)
+a = []
+a_gpu = []
 
 # init STREAMS as array of streams, A and A_GPU arrays where ith element is the partion of the data that streams[i] is assigned to 
-streams = np.empty(nStreams)
+streams = []
 for i in range(nStreams):
-	streams[i] = cuda.Stream()
-	a[i] = np.zeros(streamSize, dtype=np.float32)
-	a_gpu[i] = cuda.mem_alloc(streamBytes)
-
+	streams.append(cuda.Stream())
+	a.append(np.zeros(streamSize, dtype=np.float32))
+	a_gpu.append(cuda.mem_alloc(streamBytes))
 
 for i in range(nStreams):
-	offset = i * streamSize
 	cuda.memcpy_htod(a_gpu[i], a[i])
-	
-	kernel(a_gpu[i], offset, block=blockSize, stream=i)
 
+
+
+for i in range(nStreams):
+	offset = np.int32(i * streamSize)
+	#cuda.memcpy_htod(a_gpu[i], a[i])
+	
+	kernel(a_gpu[i], offset, block=(blockSize, 1, 1), stream=streams[i])
+	streams[i].synchronize()
+	#cuda.memcpy_dtoh(a[i], a_gpu[i])
+
+for i in range(nStreams):
 	cuda.memcpy_dtoh(a[i], a_gpu[i])
 
 print np.max(a)
