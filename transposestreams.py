@@ -18,18 +18,12 @@ odata = np.empty_like(idata, dtype=np.float32)
 idata_pin = cuda.register_host_memory(idata)
 odata_pin = cuda.register_host_memory(odata)
 
-
-#s.record()
-
 idata_gpu = cuda.mem_alloc(idata.nbytes)
 odata_gpu = cuda.mem_alloc(odata.nbytes)
 
 cuda.memcpy_htod_async(idata_gpu, idata_pin)
 cuda.memcpy_htod_async(odata_gpu, odata_pin)
 
-#e.record()
-#e.synchronize()
-#print s.time_till(e)
 
 code = """
 const int TILE_DIM = %d;
@@ -85,19 +79,20 @@ __global__ void transpose(float *odata, const float *idata)
 code = code % (TILE_DIM, BLOCK_ROWS)
 mod = SourceModule(code)
 
-copy = mod.get_function("transpose")
+copy = mod.get_function("copy")
 
 grid = (N/TILE_DIM, N/TILE_DIM, 1)
 block = (TILE_DIM, BLOCK_ROWS, 1)
+nStreams = 2
 
-#s.record()
+
+stream = []
+for i in range(nStreams):
+	stream.append(cuda.Stream())
+
 
 copy.prepare("PP")
 copy.prepared_call(grid, block, odata_gpu, idata_gpu)
-
-#e.record()
-#e.synchronize()
-#print s.time_till(e)
 
 cuda.memcpy_dtoh(odata_pin, odata_gpu)
 

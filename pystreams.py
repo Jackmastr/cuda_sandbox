@@ -64,6 +64,6 @@ for i in range(nStreams):
 	cuda.memcpy_dtoh(a[i], a_gpu[i])
 
 a = np.asarray(a)
-a = a.flatten()[1]
+a = a.flatten()
 print a
 print np.where(a == 0)
