@@ -46,14 +46,11 @@ mod = SourceModule("""
 	{
 		int index = blockIdx.x * blockDim.x + threadIdx.x;
 		int stride = blockDim.x * gridDim.x;
-
 		for (int i = index; i < n; i += stride)
-		{
-			y[i] = a*x[i] + y[i];
-		}
+			y[i] += a*x[i];
+		
 	}
 	""")
-dim = (1024, 1, 1)
 
 # Calculating the time to perform the calculation
 
@@ -61,7 +58,7 @@ start.record()
 
 saxpy = mod.get_function("saxpy")
 saxpy.prepare("ifPP")
-saxpy.prepared_call((1,1), dim, n, a, x_gpu, y_gpu)
+saxpy.prepared_call((4096, 1), (1024, 1, 1), n, a, x_gpu, y_gpu)
 
 # WITHOUT USING A PREPARED CALL (no noticable speedup here)
 #saxpy(n, a, x_gpu, y_gpu, block=dim)
