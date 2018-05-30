@@ -3,8 +3,14 @@ import pycuda.autoinit
 from pycuda.compiler import SourceModule
 import numpy as np
 
+first = cuda.Event()
+first.record()
+final = cuda.Event()
+
 start = cuda.Event()
 end = cuda.Event()
+
+
 
 n = np.int32(1e8)
 a = np.float32(2)
@@ -12,16 +18,22 @@ a = np.float32(2)
 x = np.ones(n, dtype=np.float32)
 y = 2.*np.ones(n, dtype=np.float32)
 
+x_pin = cuda.register_host_memory(x)
+y_pin = cuda.register_host_memory(y)
+
 x_gpu = cuda.mem_alloc(x.nbytes)
 y_gpu = cuda.mem_alloc(y.nbytes)
 
+nStreams = 2
+
+stream = [cuda.Stream() for i in range(nStreams)]
 
 # Calculating the time to transfer the data to the device
 
 start.record()
 
-cuda.memcpy_htod(x_gpu, x)
-cuda.memcpy_htod(y_gpu, y)
+cuda.memcpy_htod_async(x_gpu, x_pin, stream=stream[0])
+cuda.memcpy_htod_async(y_gpu, y_pin, stream=stream[1])
 
 end.record()
 end.synchronize()
@@ -67,8 +79,8 @@ ans = np.empty_like(y)
 
 start.record()
 
-cuda.memcpy_dtoh(ans, y_gpu)
-
+cuda.memcpy_dtoh(y_pin, y_gpu)
+ans=y_pin
 #print "answer: ", ans
 
 end.record()
@@ -77,3 +89,6 @@ end.synchronize()
 print "Transfer to host takes: ", start.time_till(end), " ms"
 
 print "Error in calculation is: ", np.max(np.abs(4-ans))
+
+final.record()
+print "Total time: ", first.time_till(final), " ms"
