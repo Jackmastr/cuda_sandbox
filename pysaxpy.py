@@ -12,7 +12,7 @@ end = cuda.Event()
 
 
 
-n = np.int32(1e4)
+n = np.int32(1e8)
 a = np.float32(2)
 
 x = np.ones(n, dtype=np.float32)
@@ -44,7 +44,7 @@ print "Transfer to device takes: ", start.time_till(end), " ms"
 mod = SourceModule("""
 	__global__ void saxpy(int n, float a, float *x, float *y)
 	{
-		extern __shared__ int y_buf[];
+		//extern __shared__ int y_buf[];
 		int index = blockIdx.x * blockDim.x + threadIdx.x;
 		int stride = blockDim.x * gridDim.x;
 		for (int i = index; i < n; i += stride)
@@ -52,7 +52,7 @@ mod = SourceModule("""
 			//y_buf[i] = y[i] + a*x[i];
 			//__syncthreads();
 			//y[i] = y_buf[i];
-			y[i] += y[i] + a*x[i];
+			y[i] += a*x[i];
 		}
 	}
 	""")
@@ -62,8 +62,10 @@ mod = SourceModule("""
 start.record()
 
 saxpy = mod.get_function("saxpy")
+
+
 saxpy.prepare("ifPP")
-saxpy.prepared_call((4096, 1), (1024, 1, 1), n, a, x_gpu, y_gpu, shared_size=y.nbytes)
+saxpy.prepared_call((4096, 1), (1024, 1, 1), n, a, x_gpu, y_gpu)
 
 # WITHOUT USING A PREPARED CALL (no noticable speedup here)
 #saxpy(n, a, x_gpu, y_gpu, block=dim)
