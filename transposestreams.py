@@ -9,7 +9,7 @@ e = cuda.Event()
 TILE_DIM = 32
 BLOCK_ROWS = 8
 
-N = 32 * 8
+N = 32 * 256
 
 
 
@@ -68,10 +68,11 @@ code = code % (TILE_DIM, BLOCK_ROWS)
 mod = SourceModule(code)
 
 copy = mod.get_function("copy")
+transpose = mod.get_function("transpose")
 
-nStreams = 2
+nStreams = 8
 
-grid = (N/(nStreams*TILE_DIM), N/(nStreams*TILE_DIM), 1)
+grid = (N/(nStreams*TILE_DIM), N/(TILE_DIM), 1)
 #grid = (1, 1, 1)
 block = (TILE_DIM, BLOCK_ROWS, 1)
 
@@ -118,6 +119,8 @@ for i in range(nStreams):
 for i in range(nStreams):
 	stream[i].synchronize()
 
-#odata_pin_list = np.asarray(odata_pin_list)
-print "new", odata_pin_list
-print "old", idata_pin_list
+print odata_pin_list
+odata_pin_list = np.asarray(odata_pin_list)
+odata_pin_list = odata_pin_list.reshape((N,N))
+
+print odata_pin_list
