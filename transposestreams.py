@@ -9,20 +9,8 @@ e = cuda.Event()
 TILE_DIM = 32
 BLOCK_ROWS = 8
 
-N = 32 * 1024
+N = 32 * 8
 
-idata = np.tril(np.ones((N,N), dtype=np.float32))
-
-odata = np.empty_like(idata, dtype=np.float32)
-
-idata_pin = cuda.register_host_memory(idata)
-odata_pin = cuda.register_host_memory(odata)
-
-idata_gpu = cuda.mem_alloc(idata.nbytes)
-odata_gpu = cuda.mem_alloc(odata.nbytes)
-
-cuda.memcpy_htod_async(idata_gpu, idata_pin)
-cuda.memcpy_htod_async(odata_gpu, odata_pin)
 
 
 code = """
@@ -81,19 +69,55 @@ mod = SourceModule(code)
 
 copy = mod.get_function("copy")
 
-grid = (N/TILE_DIM, N/TILE_DIM, 1)
-block = (TILE_DIM, BLOCK_ROWS, 1)
 nStreams = 2
+
+grid = (N/(nStreams*TILE_DIM), N/(nStreams*TILE_DIM), 1)
+#grid = (1, 1, 1)
+block = (TILE_DIM, BLOCK_ROWS, 1)
 
 
 stream = []
 for i in range(nStreams):
 	stream.append(cuda.Stream())
 
+idata = np.tril(np.ones((N,N), dtype=np.float32))
 
-copy.prepare("PP")
-copy.prepared_call(grid, block, odata_gpu, idata_gpu)
+odata = np.zeros_like(idata, dtype=np.float32)
 
-cuda.memcpy_dtoh(odata_pin, odata_gpu)
+idata_pin_list = []
+odata_pin_list = []
 
-print odata_pin
+for i in range(nStreams):
+	i_slice = idata[i*N/nStreams:(i+1)*N/nStreams]
+	o_slice = odata[i*N/nStreams:(i+1)*N/nStreams]
+	idata_pin_list.append(cuda.register_host_memory(i_slice))
+	odata_pin_list.append(cuda.register_host_memory(o_slice))
+
+#print idata_pin_list[0]
+
+# Using independent host->device, kernel, device->host streams?
+idata_gpu_list = []
+odata_gpu_list = []
+
+for i in range(nStreams):
+	idata_gpu_list.append(cuda.mem_alloc(idata.nbytes/nStreams))
+	odata_gpu_list.append(cuda.mem_alloc(odata.nbytes/nStreams))
+
+	cuda.memcpy_htod_async(idata_gpu_list[i], idata_pin_list[i])
+	cuda.memcpy_htod_async(odata_gpu_list[i], odata_pin_list[i])
+
+	stream[i].synchronize()
+
+	copy.prepare("PP")
+	copy.prepared_call(grid, block, odata_gpu_list[i], idata_gpu_list[i])
+
+	stream[i].synchronize()
+
+	cuda.memcpy_dtoh_async(odata_pin_list[i], odata_gpu_list[i])
+
+for i in range(nStreams):
+	stream[i].synchronize()
+
+#odata_pin_list = np.asarray(odata_pin_list)
+print "new", odata_pin_list
+print "old", idata_pin_list
