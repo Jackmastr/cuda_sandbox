@@ -14,7 +14,7 @@ a = np.float32(2)
 x = np.ones(N, dtype=np.float32)
 y = 2.*np.ones(N, dtype=np.float32)
 
-nStreams = 1
+nStreams = 2
 streams = [cuda.Stream() for i in range(nStreams)]
 
 x_pin = [cuda.register_host_memory(x[i*N/nStreams:(i+1)*N/nStreams]) for i in range(nStreams)]

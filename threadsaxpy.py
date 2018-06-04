@@ -23,8 +23,8 @@ class GPUThread(threading.Thread):
 		
 		self.x_gpu = cuda.mem_alloc(x.nbytes)
 		self.y_gpu = cuda.mem_alloc(y.nbytes)
-		cuda.memcpy_htod(self.x_gpu, x)
-		cuda.memcpy_htod(self.y_gpu, y)
+		cuda.memcpy_htod_async(self.x_gpu, x)
+		cuda.memcpy_htod_async(self.y_gpu, y)
 
 		out = test_kernel(self.n, self.a, self.x_gpu, self.y_gpu)
 #		print "successful exit from thread ",  self.number
@@ -62,11 +62,9 @@ x = np.ones(n, dtype=np.float32)
 y = 2.*np.ones(n, dtype=np.float32)
 
 num = cuda.Device.count()
-for i in range(num):
-	print i
-	gpu_thread = GPUThread(i, n, a, x, y)
-	out = gpu_thread.run()
-	print out
+gpu_thread = [GPUThread(i, n, a, x, y).run() for i in range(num)]
+print gpu_thread
+
 end.record()
 end.synchronize()
 print "Total time: ", start.time_till(end), " ms"
