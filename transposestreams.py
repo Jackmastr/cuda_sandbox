@@ -119,7 +119,6 @@ for i in range(nStreams):
 for i in range(nStreams):
 	stream[i].synchronize()
 
-print odata_pin_list
 odata_pin_list = np.asarray(odata_pin_list)
 odata_pin_list = odata_pin_list.reshape((N,N))
 

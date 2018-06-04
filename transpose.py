@@ -5,6 +5,7 @@ import numpy as np
 
 s = cuda.Event()
 e = cuda.Event()
+s.record()
 
 TILE_DIM = 32
 BLOCK_ROWS = 8
@@ -101,4 +102,8 @@ copy.prepared_call(grid, block, odata_gpu, idata_gpu)
 
 cuda.memcpy_dtoh(odata_pin, odata_gpu)
 
-print odata_pin
+#print odata_pin
+
+e.record()
+e.synchronize()
+print s.time_till(e)
