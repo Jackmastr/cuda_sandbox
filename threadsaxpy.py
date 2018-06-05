@@ -50,10 +50,10 @@ def test_kernel(n, a, x_gpu, y_gpu):
 		"""
 	mod = SourceModule(code)
 	saxpy = mod.get_function("saxpy")
-	saxpy(n, a, x_gpu, y_gpu, block=(1024, 1, 1))
+	saxpy(n, a, x_gpu, y_gpu, block=(1024, 1, 1), grid=(1,1))
 	out = cuda.register_host_memory(np.empty(n, dtype=np.float32))
 
-	cuda.memcpy_dtoh(out, y_gpu)
+	cuda.memcpy_dtoh_async(out, y_gpu)
 	return out
 
 n = np.int32(1e8)
@@ -63,7 +63,7 @@ y = 2.*np.ones(n, dtype=np.float32)
 
 num = cuda.Device.count()
 gpu_thread = [GPUThread(i, n, a, x, y).run() for i in range(num)]
-print gpu_thread
+
 
 end.record()
 end.synchronize()

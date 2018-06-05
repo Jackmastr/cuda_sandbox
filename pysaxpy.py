@@ -12,7 +12,7 @@ end = cuda.Event()
 
 
 
-n = np.int32(1e8)
+n = np.int32(1<<20)
 a = np.float32(2)
 
 x = np.ones(n, dtype=np.float32)

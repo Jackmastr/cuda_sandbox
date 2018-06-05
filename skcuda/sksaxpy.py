@@ -8,7 +8,7 @@ s = cuda.Event()
 e = cuda.Event()
 s.record()
 
-N = np.int32(1e8)
+N = np.int32(1<<20)
 a = np.float32(2)
 
 x = np.ones(N, dtype=np.float32)

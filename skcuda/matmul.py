@@ -10,8 +10,8 @@ e = cuda.Event()
 s.record()
 
 linalg.init()
-M = 1024
-N = 1024
+M = 4096
+N = 4096
 
 A = np.asarray(np.random.rand(M, N), dtype=np.float32)
 B = np.asarray(np.random.rand(N, M), dtype=np.float32)
