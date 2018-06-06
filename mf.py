@@ -15,7 +15,7 @@ e = cuda.Event()
 BLOCK_WIDTH = 32
 BLOCK_HEIGHT = 32
 
-WINDOW_SIZE = 3
+WINDOW_SIZE = 1
 
 padding = WINDOW_SIZE/2
 
@@ -51,7 +51,12 @@ code = """
 				for (int y = 0; y < WS; y++)
 				{
 
+					//printf("should only be one: %%d\\n", img_width * img_height);
+
+					printf("test%%d\\n", (row + x - 1)*img_width + (col + y - 1));
+					//printf("%%d\\n", x * WS + y);
 					window[x * WS + y] = in[(row + x - 1)*img_width + (col + y - 1)];
+
 				}
 			}
 
@@ -82,11 +87,11 @@ code = code % {
 mod = SourceModule(code)
 mf_naive = mod.get_function('mf_naive')
 
-N = np.int32(8196)
+N = np.int32(1)
 
-#indata = np.array([[2]], dtype=np.float32)
+indata = np.array([[2]], dtype=np.float32)
 #indata = np.array([[2, 80, 6, 3], [2, 80, 6, 3], [2, 80, 6, 3], [2, 80, 6, 3]], dtype=np.float32)
-indata = np.array(np.random.rand(N, N), dtype=np.float32)
+#indata = np.array(np.random.rand(N, N), dtype=np.float32)
 
 s.record()
 # Must pad with zeros in order for this strategy to work
@@ -107,12 +112,14 @@ cuda.memcpy_htod(out_gpu, out_pin)
 mf_naive.prepare("PPii")
 
 # N + 2 because pad on all sides with zeros
-gridx = int(np.ceil((N+2)/BLOCK_WIDTH))
-gridy = int(np.ceil((N+2)/BLOCK_HEIGHT))
+gridx = int(np.ceil((N+2*padding)/BLOCK_WIDTH))
+gridy = int(np.ceil((N+2*padding)/BLOCK_HEIGHT))
 grid = (gridx,gridy)
 grid = (1,1)
 
-mf_naive.prepared_call( grid, (BLOCK_WIDTH, BLOCK_HEIGHT, 1), in_gpu, out_gpu, N+2, N+2)
+
+
+mf_naive.prepared_call( grid, (BLOCK_WIDTH, BLOCK_HEIGHT, 1), in_gpu, out_gpu, N+2*padding, N+2*padding)
 
 
 cuda.memcpy_dtoh(out_pin, out_gpu)
@@ -134,7 +141,7 @@ if (padding > 0):
 	true_ans = true_ans[padding:-padding, padding:-padding]
 
 print np.allclose(out_pin, true_ans)
-# print "CUDA OUTPUT"
-# print out_pin
-# print "SCIPY MEDFILT OUTPUT"
-# print true_ans
+print "CUDA OUTPUT"
+print out_pin
+print "SCIPY MEDFILT OUTPUT"
+print true_ans
