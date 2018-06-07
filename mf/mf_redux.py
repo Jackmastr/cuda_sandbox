@@ -6,7 +6,7 @@ import numpy as np
 import scipy.signal as sps
 
 
-def MedianFilter(ws=3, bw=32, bh=32, n=256, indata=None):
+def MedianFilter(ws=3, bw=16, bh=16, n=256, m=0, indata=None):
 
 	BLOCK_WIDTH = bw
 	BLOCK_HEIGHT = bh
@@ -16,10 +16,14 @@ def MedianFilter(ws=3, bw=32, bh=32, n=256, indata=None):
 	padding = WINDOW_SIZE/2
 
 	N = np.int32(n)
+	if m == 0:
+		M = np.int32(n)
+	else:
+		M = np.int32(m)
 
 	#indata = np.array([[2, 80, 6, 3], [2, 80, 6, 3], [2, 80, 6, 3], [2, 80, 6, 3]], dtype=np.float32)
 	if indata is None:
-		indata = np.array(np.random.rand(N, N), dtype=np.float32)
+		indata = np.array(np.random.rand(N, M), dtype=np.float32)
 	else:
 		indata = np.array(indata, dtype=np.float32)
 
@@ -112,13 +116,15 @@ def MedianFilter(ws=3, bw=32, bh=32, n=256, indata=None):
 
 	mf.prepare("PPii")
 
-	expanded_size = N + (2 * padding)
+	expanded_N = N + (2 * padding)
+	expanded_M = M + (2 * padding)
 
-	gridx = max(1, int(np.ceil((expanded_size)/BLOCK_WIDTH)))
-	gridy = max(1, int(np.ceil((expanded_size)/BLOCK_HEIGHT)))
+	gridx = max(1, int(np.ceil((expanded_M)/BLOCK_WIDTH)))
+	gridy = max(1, int(np.ceil((expanded_N)/BLOCK_HEIGHT)))
 	grid = (gridx,gridy)
 	block = (BLOCK_WIDTH, BLOCK_HEIGHT, 1)
-	mf.prepared_call(grid, block, in_gpu, out_gpu, expanded_size, expanded_size)
+	
+	mf.prepared_call(grid, block, in_gpu, out_gpu, expanded_N, expanded_M)
 
 
 	cuda.memcpy_dtoh(out_pin, out_gpu)
