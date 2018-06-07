@@ -12,10 +12,10 @@ import scipy.signal as sps
 s = cuda.Event()
 e = cuda.Event()
 
-BLOCK_WIDTH = 32
-BLOCK_HEIGHT = 32
+BLOCK_WIDTH = 1
+BLOCK_HEIGHT = 1
 
-WINDOW_SIZE = 1
+WINDOW_SIZE = 3
 
 padding = WINDOW_SIZE/2
 
@@ -51,12 +51,7 @@ code = """
 				for (int y = 0; y < WS; y++)
 				{
 
-					//printf("should only be one: %%d\\n", img_width * img_height);
-
-					printf("test%%d\\n", (row + x - 1)*img_width + (col + y - 1));
-					//printf("%%d\\n", x * WS + y);
-					window[x * WS + y] = in[(row + x - 1)*img_width + (col + y - 1)];
-
+					window[x * WS + y] = in[(row + x)*img_width + (col + y)];
 				}
 			}
 
@@ -89,8 +84,8 @@ mf_naive = mod.get_function('mf_naive')
 
 N = np.int32(1)
 
-indata = np.array([[2]], dtype=np.float32)
-#indata = np.array([[2, 80, 6, 3], [2, 80, 6, 3], [2, 80, 6, 3], [2, 80, 6, 3]], dtype=np.float32)
+#indata = np.array([[2]], dtype=np.float32)
+indata = np.array([[2, 80, 6, 3], [2, 80, 6, 3], [2, 80, 6, 3], [2, 80, 6, 3]], dtype=np.float32)
 #indata = np.array(np.random.rand(N, N), dtype=np.float32)
 
 s.record()
@@ -126,22 +121,22 @@ cuda.memcpy_dtoh(out_pin, out_gpu)
 
 e.record()
 e.synchronize()
-print s.time_till(e), "ms"
+#print s.time_till(e), "ms"
 
 
 s.record()
 true_ans= sps.medfilt2d(indata, (WINDOW_SIZE, WINDOW_SIZE))
 e.record()
 e.synchronize()
-print s.time_till(e), "ms"
+#print s.time_till(e), "ms"
 
 
 if (padding > 0):
 	out_pin = out_pin[padding:-padding, padding:-padding]
 	true_ans = true_ans[padding:-padding, padding:-padding]
 
-print np.allclose(out_pin, true_ans)
-print "CUDA OUTPUT"
-print out_pin
-print "SCIPY MEDFILT OUTPUT"
-print true_ans
+# print np.allclose(out_pin, true_ans)
+# print "CUDA OUTPUT"
+# print out_pin
+# print "SCIPY MEDFILT OUTPUT"
+# print true_ans

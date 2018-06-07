@@ -8,9 +8,19 @@ import scipy.signal as sps
 BLOCK_WIDTH = 32
 BLOCK_HEIGHT = 32
 
-WINDOW_SIZE = 3
+WINDOW_SIZE = 5
 
 padding = WINDOW_SIZE/2
+
+N = np.int32(256)
+
+#indata = np.array([[2, 80, 6, 3], [2, 80, 6, 3], [2, 80, 6, 3], [2, 80, 6, 3]], dtype=np.float32)
+indata_orig = np.array(np.random.rand(N, N), dtype=np.float32)
+
+s = cuda.Event()
+e = cuda.Event()
+s.record()
+
 
 code = """
 
@@ -21,53 +31,50 @@ code = """
 
 	__global__ void mf(float* in, float* out, int imgWidth, int imgHeight)
 	{
-		int iterator;
-		int start = WS/2;
-		int end = start + 1;
+		const int med = (WS*WS)/2;
+		float window[WS*WS];
+		const int edgex = WS/2; // window width / 2
+		const int edgey = WS/2; // window height / 2
 
-		__shared__ float surround[BW*BH][WS];
+		const int x_thread_offset = BW * blockIdx.x + threadIdx.x;
+		const int y_thread_offset = BH * blockIdx.y + threadIdx.y;
 
-		const int x = blockDim.x * blockIdx.x + threadIdx.x;
-		const int y = blockDim.y * blockIdx.y + threadIdx.y;
+		const int x_stride = BW * gridDim.x;
+		const int y_stride = BH * gridDim.y;
 
-		const int tid = threadIdx.y * blockIdx.y + threadIdx.x;
 
-		if (x > imgWidth || y > imgHeight)
-			return;
-
-		if (x == 0 || x == imgWidth - start || y == 0 || y == imgHeight - start)
+		for (int x = edgex + x_thread_offset; x < imgWidth - edgex; x += x_stride)
 		{
-			// pass
-		}
-		else
-		{
-			iterator = 0;
-			for (int r = x - start; r < x + end; r++)
+			for (int y = edgey + y_thread_offset; y < imgWidth - edgey; y += y_stride)
 			{
-				for (int c = y - start; c < y + end; c++)
+				int i = 0;
+				for (int fx = 0; fx < WS; ++fx)
 				{
-					surround[tid][iterator] *= in[c*imgWidth + r];
-					iterator++;
+					for (int fy = 0; fy < WS; ++fy)
+					{
+						window[i] = in[(x + fx - edgex)*imgWidth + (y + fy - edgey)];
+						i += 1;
+					}
 				}
+
+				// Sort to find the median
+				for (int j = 0; j < WS*WS; ++j)
+				{
+					for (int k = j + 1; k < WS*WS; ++k)
+					{
+						if (window[j] > window[k])
+						{
+							float tmp = window[j];
+							window[j] = window[k];
+							window[k] = tmp;
+						}
+					}
+				}
+
+				out[x*imgWidth + y] = window[med];
+
 			}
 		}
-
-		for (int i = 0; i < WS/2; i++)
-		{
-			int min = i;
-			for (int l = i+1; l < WS; l++)
-			{
-				if (surround[tid][l] < surround[tid][min])
-					min = l;
-			}
-			float tmp = surround[tid][min];
-			surround[tid][i] = surround[tid][min];
-			surround[tid][min] = tmp;
-		}
-
-		out[y * imgWidth + x] = surround[tid][WS/2];
-		__syncthreads();
-
 	}
 	"""
 
@@ -80,11 +87,10 @@ code = code % {
 mod = SourceModule(code)
 mf = mod.get_function('mf')
 
-N = np.int32(4)
 
-indata = np.array([[2, 80, 6, 3], [2, 80, 6, 3], [2, 80, 6, 3], [2, 80, 6, 3]], dtype=np.float32)
-#indata = np.array(np.random.rand(N, N), dtype=np.float32)
 
+
+indata = np.pad(indata_orig, padding, 'constant', constant_values=0)
 outdata = np.ones_like(indata)
 
 
@@ -100,14 +106,30 @@ cuda.memcpy_htod(out_gpu, out_pin)
 
 mf.prepare("PPii")
 
-grid = (1,1)
+gridx = int(np.ceil((N+2*padding)/BLOCK_WIDTH))
+gridy = int(np.ceil((N+2*padding)/BLOCK_HEIGHT))
+grid = (gridx,gridy)
 
-mf.prepared_call( grid, (BLOCK_WIDTH, BLOCK_HEIGHT, 1), in_gpu, out_gpu, N+2, N+2)
+mf.prepared_call( grid, (BLOCK_WIDTH, BLOCK_HEIGHT, 1), in_gpu, out_gpu, N+2*padding, N+2*padding)
 
 
 cuda.memcpy_dtoh(out_pin, out_gpu)
 
-true_ans= sps.medfilt2d(indata, (WINDOW_SIZE, WINDOW_SIZE))
+if (padding > 0):
+	out_pin = out_pin[padding:-padding, padding:-padding]
 
+
+e.record()
+e.synchronize()
+print s.time_till(e), "ms"
+
+
+s.record()
+true_ans= sps.medfilt2d(indata_orig, (WINDOW_SIZE, WINDOW_SIZE))
+e.record()
+e.synchronize()
+print s.time_till(e), "ms"
+
+print np.allclose(out_pin, true_ans)
 print out_pin
 print true_ans
