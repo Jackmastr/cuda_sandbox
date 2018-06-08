@@ -11,10 +11,10 @@ class BasicTest(unittest.TestCase):
 		in2 = np.random.rand(93, 93)
 		in3 = np.random.rand(7000, 7000)
 
-		check0 = sps.medfilt2d(in0, (1,1))
-		check1 = sps.medfilt2d(in1, (1,1))
-		check2 = sps.medfilt2d(in2, (1,1))
-		check3 = sps.medfilt2d(in3, (1,1))
+		check0 = sps.medfilt2d(in0, 1)
+		check1 = sps.medfilt2d(in1, 1)
+		check2 = sps.medfilt2d(in2, 1)
+		check3 = sps.medfilt2d(in3, 1)
 
 		self.assertTrue(np.allclose(check0, mf_redux.MedianFilter(ws=1, n=1, indata=in0)))
 		self.assertTrue(np.allclose(check1, mf_redux.MedianFilter(ws=1, n=29, indata=in1)))
@@ -28,10 +28,10 @@ class BasicTest(unittest.TestCase):
 		in2 = np.random.rand(93, 93)
 		in3 = np.random.rand(7000, 7000)
 
-		check0 = sps.medfilt2d(in0, (3,3))
-		check1 = sps.medfilt2d(in1, (3,3))
-		check2 = sps.medfilt2d(in2, (3,3))
-		check3 = sps.medfilt2d(in3, (3,3))
+		check0 = sps.medfilt2d(in0, 3)
+		check1 = sps.medfilt2d(in1, 3)
+		check2 = sps.medfilt2d(in2, 3)
+		check3 = sps.medfilt2d(in3, 3)
 
 		self.assertTrue(np.allclose(check0, mf_redux.MedianFilter(ws=3, n=1, indata=in0)))
 		self.assertTrue(np.allclose(check1, mf_redux.MedianFilter(ws=3, n=29, indata=in1)))
