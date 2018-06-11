@@ -21,5 +21,17 @@ class NotSquareTest(unittest.TestCase):
 		self.assertTrue(np.allclose(check2, mf_redux.MedianFilter(ws=3, n=2, m=3, indata=in2)))
 		self.assertTrue(np.allclose(check3, mf_redux.MedianFilter(ws=5, n=8013, m=700, indata=in3)))
 
+	def TestLopsidedWindow(self):
+		in0 = np.random.rand(1, 73)
+		in1 = np.random.rand(5, 3)
+		in2 = np.random.rand(2, 3)
+		in3 = np.random.rand(8013, 700)
+
+		check0 = sps.medfilt2d(in0, (1, 11))
+		check1 = sps.medfilt2d(in1, (11, 1))
+		check2 = sps.medfilt2d(in2, (3, 5))
+		check3 = sps.medfilt2d(in3, (9, 5))
+
+
 if __name__ == '__main__':
 	unittest.main()

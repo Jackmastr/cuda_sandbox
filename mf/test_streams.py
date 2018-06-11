@@ -5,7 +5,7 @@ import mf_redux
 
 class StreamTest(unittest.TestCase):
 	def testStreams(self):
-		""" Test using non-square images """
+		""" Test using streams """
 		in0 = np.random.rand(1, 73)
 		in1 = np.random.rand(5, 3)
 		in2 = np.random.rand(2, 3)
