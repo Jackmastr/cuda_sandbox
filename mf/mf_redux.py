@@ -8,12 +8,12 @@ import numpy as np
 import scipy.signal as sps
 
 
-def MedianFilter(indata=None, ws=3, bw=16, bh=16, n=256, m=0, timing=False, nStreams=0):
+def MedianFilter(input=None, kernel_size=3, bw=16, bh=16, n=256, m=0, timing=False, nStreams=0):
 
 	BLOCK_WIDTH = bw
 	BLOCK_HEIGHT = bh
 
-	WINDOW_SIZE = ws
+	WINDOW_SIZE = kernel_size
 
 	padding = WINDOW_SIZE/2
 
@@ -24,10 +24,10 @@ def MedianFilter(indata=None, ws=3, bw=16, bh=16, n=256, m=0, timing=False, nStr
 		M = np.int32(m)
 
 	#indata = np.array([[2, 80, 6, 3], [2, 80, 6, 3], [2, 80, 6, 3], [2, 80, 6, 3]], dtype=np.float32)
-	if indata is None:
+	if input is None:
 		indata = np.array(np.random.rand(M, N), dtype=np.float32)
 	else:
-		indata = np.array(indata, dtype=np.float32)
+		indata = np.array(input, dtype=np.float32)
 
 	s = cuda.Event()
 	e = cuda.Event()
@@ -147,6 +147,63 @@ def MedianFilter(indata=None, ws=3, bw=16, bh=16, n=256, m=0, timing=False, nStr
 			}
 		}
 
+		__global__ void mf_shared2(float* in, float* out, int imgWidth, int imgHeight)
+		{
+			const int TS = 16;
+			__shared__ float tile[TS][TS];
+
+			float window[%(WS^2)s];
+
+			const int x_thread_offset = %(BW)s * blockIdx.x + threadIdx.x;
+			const int y_thread_offset = %(BH)s * blockIdx.y + threadIdx.y;
+
+			// Load into the tile for this block
+
+			tile[threadIdx.x][threadIdx.y] = in[x_thread_offset + y_thread_offset*imgWidth];
+
+			__syncthreads();
+
+			for (int y = %(WS/2)s + y_thread_offset; y < imgHeight - %(WS/2)s; y += %(y_stride)s)
+			{
+				for (int x = %(WS/2)s + x_thread_offset; x < imgWidth - %(WS/2)s; x += %(x_stride)s)
+				{
+
+					int i = 0;
+					for (int fx = 0; fx < %(WS)s; ++fx)
+					{
+						for (int fy = 0; fy < %(WS)s; ++fy)
+						{
+							if ( (x + fx - %(WS/2)s)  )
+							{
+								window[i] = tile[threadIdx.x + fx][threadIdx.y + fy];
+							}
+							else
+							{
+								window[i] = in[(x + fx - %(WS/2)s) + (y + fy - %(WS/2)s)*imgWidth];
+							}
+							i += 1;
+						}
+					}
+
+
+					// Sort to find the median
+					for (int j = 0; j < %(WS^2)s; ++j)
+					{
+						for (int k = j + 1; k < %(WS^2)s; ++k)
+						{
+							if (window[j] > window[k])
+							{
+								float tmp = window[j];
+								window[j] = window[k];
+								window[k] = tmp;
+							}
+						}
+					}
+					out[y*imgWidth + x] = window[%(WS^2)s/2];
+				}
+			}
+		}
+
 		"""
 
 	code = code % {
@@ -173,8 +230,14 @@ def MedianFilter(indata=None, ws=3, bw=16, bh=16, n=256, m=0, timing=False, nStr
 
 	cuda.memcpy_htod(in_gpu, in_pin)
 
+
+	# s.record()
 	mf.prepare("PPii")
 	mf.prepared_call(grid, block, in_gpu, out_gpu, expanded_M, expanded_N)
+	# e.record()
+	# e.synchronize()
+	# print s.time_till(e), "ms"
+
 
 	cuda.memcpy_dtoh(outdata, out_gpu)
 
@@ -231,17 +294,17 @@ def MedianFilter(indata=None, ws=3, bw=16, bh=16, n=256, m=0, timing=False, nStr
 	if (padding > 0):
 		outdata = outdata[padding:-padding, padding:-padding]
 
-	if (timing):
-		e.record()
-		e.synchronize()
-		print "THIS FUNCTION: ", s.time_till(e), "ms"
+	# if (timing):
+	# 	e.record()
+	# 	e.synchronize()
+	# 	print "THIS FUNCTION: ", s.time_till(e), "ms"
 
 
-		# s.record()
-		# true_ans= sps.medfilt2d(indata, (WINDOW_SIZE, WINDOW_SIZE))
-		# e.record()
-		# e.synchronize()
-		# print "SCIPY MEDFILT", s.time_till(e), "ms"
+	# 	s.record()
+	# 	true_ans= sps.medfilt2d(indata, (WINDOW_SIZE, WINDOW_SIZE))
+	# 	e.record()
+	# 	e.synchronize()
+	# 	print "SCIPY MEDFILT", s.time_till(e), "ms"
 
 	return outdata
 

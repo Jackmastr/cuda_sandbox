@@ -18,11 +18,11 @@ class StreamTest(unittest.TestCase):
 		check2 = sps.medfilt2d(in2, 3)
 		check3 = sps.medfilt2d(in3, 5)
 
-		self.assertTrue(np.allclose(check99, mf_redux.MedianFilter(ws=1, n=9, indata=in99, nStreams=3, bh=1, bw=1 )))
-		self.assertTrue(np.allclose(check0, mf_redux.MedianFilter(ws=1, n=1, m=73, indata=in0, nStreams=3 )))
-		self.assertTrue(np.allclose(check1, mf_redux.MedianFilter(ws=1, n=5, m=3, indata=in1, nStreams=3)))
-		self.assertTrue(np.allclose(check2, mf_redux.MedianFilter(ws=3, n=2, m=3, indata=in2, nStreams=6)))
-		self.assertTrue(np.allclose(check3, mf_redux.MedianFilter(ws=5, n=8013, m=700, indata=in3, nStreams=10)))
+		self.assertTrue(np.allclose(check99, mf_redux.MedianFilter(kernel_size=1, n=9, input=in99, nStreams=3, bh=1, bw=1 )))
+		self.assertTrue(np.allclose(check0, mf_redux.MedianFilter(kernel_size=1, n=1, m=73, input=in0, nStreams=3 )))
+		self.assertTrue(np.allclose(check1, mf_redux.MedianFilter(kernel_size=1, n=5, m=3, input=in1, nStreams=3)))
+		self.assertTrue(np.allclose(check2, mf_redux.MedianFilter(kernel_size=3, n=2, m=3, input=in2, nStreams=6)))
+		self.assertTrue(np.allclose(check3, mf_redux.MedianFilter(kernel_size=5, n=8013, m=700, input=in3, nStreams=10)))
 
 if __name__ == '__main__':
 	unittest.main()

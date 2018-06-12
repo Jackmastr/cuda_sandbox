@@ -4,47 +4,47 @@ import mf_redux
 
 print "3x3 window with 73x1 image"
 
-mf_redux.MedianFilter(ws=3, n=1, m=73, timing=True)
-mf_redux.MedianFilter(ws=3, n=1, m=73, timing=True)
-mf_redux.MedianFilter(ws=3, n=1, m=73, timing=True)
-mf_redux.MedianFilter(ws=3, n=1, m=73, timing=True)
+mf_redux.MedianFilter(kernel_size=3, n=1, m=73, timing=True)
+mf_redux.MedianFilter(kernel_size=3, n=1, m=73, timing=True)
+mf_redux.MedianFilter(kernel_size=3, n=1, m=73, timing=True)
+mf_redux.MedianFilter(kernel_size=3, n=1, m=73, timing=True)
 
 print "\n3x3 window with 1x73 image"
 
-mf_redux.MedianFilter(ws=3, n=73, m=1, timing=True)
-mf_redux.MedianFilter(ws=3, n=73, m=1, timing=True)
-mf_redux.MedianFilter(ws=3, n=73, m=1, timing=True)
-mf_redux.MedianFilter(ws=3, n=73, m=1, timing=True)
+mf_redux.MedianFilter(kernel_size=3, n=73, m=1, timing=True)
+mf_redux.MedianFilter(kernel_size=3, n=73, m=1, timing=True)
+mf_redux.MedianFilter(kernel_size=3, n=73, m=1, timing=True)
+mf_redux.MedianFilter(kernel_size=3, n=73, m=1, timing=True)
 
 print "\n5x5 window with 93x93 image"
 
-mf_redux.MedianFilter(ws=3, n=93, timing=True)
-mf_redux.MedianFilter(ws=3, n=93, timing=True)
-mf_redux.MedianFilter(ws=3, n=93, timing=True)
-mf_redux.MedianFilter(ws=3, n=93, timing=True)
+mf_redux.MedianFilter(kernel_size=3, n=93, timing=True)
+mf_redux.MedianFilter(kernel_size=3, n=93, timing=True)
+mf_redux.MedianFilter(kernel_size=3, n=93, timing=True)
+mf_redux.MedianFilter(kernel_size=3, n=93, timing=True)
 
 # print "\n3x3 window with 2048x2048 image"
 
-# mf_redux.MedianFilter(ws=3, n=2048, m=2048, timing=True)
-# mf_redux.MedianFilter(ws=3, n=2048, m=2048, timing=True)
-# mf_redux.MedianFilter(ws=3, n=2048, m=2048, timing=True)
-# mf_redux.MedianFilter(ws=3, n=2048, m=2048, timing=True)
+# mf_redux.MedianFilter(kernel_size=3, n=2048, m=2048, timing=True)
+# mf_redux.MedianFilter(kernel_size=3, n=2048, m=2048, timing=True)
+# mf_redux.MedianFilter(kernel_size=3, n=2048, m=2048, timing=True)
+# mf_redux.MedianFilter(kernel_size=3, n=2048, m=2048, timing=True)
 
 
 
 print "\n9x9 window with 997x997 image"
 
-mf_redux.MedianFilter(ws=9, n=997, timing=True)
-mf_redux.MedianFilter(ws=9, n=997, timing=True)
-mf_redux.MedianFilter(ws=9, n=997, timing=True)
-mf_redux.MedianFilter(ws=9, n=997, timing=True)
+mf_redux.MedianFilter(kernel_size=9, n=997, timing=True)
+mf_redux.MedianFilter(kernel_size=9, n=997, timing=True)
+mf_redux.MedianFilter(kernel_size=9, n=997, timing=True)
+mf_redux.MedianFilter(kernel_size=9, n=997, timing=True)
 
-# print "\n3x3 window with 9997x9997 image"
+print "\n3x3 window with 9997x9997 image"
 
-# mf_redux.MedianFilter(ws=3, n=9997, timing=True)
-# mf_redux.MedianFilter(ws=3, n=9997, timing=True)
-# mf_redux.MedianFilter(ws=3, n=9997, timing=True)
-# mf_redux.MedianFilter(ws=3, n=9997, timing=True)
+mf_redux.MedianFilter(kernel_size=3, n=9997, timing=True)
+mf_redux.MedianFilter(kernel_size=3, n=9997, timing=True)
+mf_redux.MedianFilter(kernel_size=3, n=9997, timing=True)
+mf_redux.MedianFilter(kernel_size=3, n=9997, timing=True)
 
 ### JUNE 8 11:00 AM ###
 

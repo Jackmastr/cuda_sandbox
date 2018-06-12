@@ -10,7 +10,7 @@ class DebugTest(unittest.TestCase):
 
 		check0 = sps.medfilt2d(in0, 3)
 
-		self.assertTrue(np.allclose(check0, mf_redux.MedianFilter(ws=3, n=4, indata=in0)))
+		self.assertTrue(np.allclose(check0, mf_redux.MedianFilter(kernel_size=3, n=4, input=in0)))
 
 if __name__ == '__main__':
 	unittest.main()

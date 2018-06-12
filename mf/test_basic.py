@@ -18,14 +18,14 @@ class BasicTest(unittest.TestCase):
 
 
 
-		# to_print = check1 - mf_redux.MedianFilter(ws=1, n=29, indata=in1)
+		# to_print = check1 - mf_redux.MedianFilter(kernel_size=1, n=29, input=in1)
 		# to_print[abs(to_print) < .0001] = 0.0
 		# print to_print
 
-		self.assertTrue(np.allclose(check0, mf_redux.MedianFilter(ws=1, n=1, indata=in0)))
-		self.assertTrue(np.allclose(check1, mf_redux.MedianFilter(ws=1, n=29, indata=in1)))
-		self.assertTrue(np.allclose(check2, mf_redux.MedianFilter(ws=1, n=93, indata=in2)))
-		self.assertTrue(np.allclose(check3, mf_redux.MedianFilter(ws=1, n=7000, indata=in3)))
+		self.assertTrue(np.allclose(check0, mf_redux.MedianFilter(kernel_size=1, n=1, input=in0)))
+		self.assertTrue(np.allclose(check1, mf_redux.MedianFilter(kernel_size=1, n=29, input=in1)))
+		self.assertTrue(np.allclose(check2, mf_redux.MedianFilter(kernel_size=1, n=93, input=in2)))
+		self.assertTrue(np.allclose(check3, mf_redux.MedianFilter(kernel_size=1, n=7000, input=in3)))
 
 	def testThreeByThree(self):
 		""" Test using a 3x3 window """
@@ -39,10 +39,10 @@ class BasicTest(unittest.TestCase):
 		check2 = sps.medfilt2d(in2, 3)
 		check3 = sps.medfilt2d(in3, 3)
 
-		self.assertTrue(np.allclose(check0, mf_redux.MedianFilter(ws=3, n=1, indata=in0)))
-		self.assertTrue(np.allclose(check1, mf_redux.MedianFilter(ws=3, n=29, indata=in1)))
-		self.assertTrue(np.allclose(check2, mf_redux.MedianFilter(ws=3, n=93, indata=in2)))
-		self.assertTrue(np.allclose(check3, mf_redux.MedianFilter(ws=3, n=7000, indata=in3)))
+		self.assertTrue(np.allclose(check0, mf_redux.MedianFilter(kernel_size=3, n=1, input=in0)))
+		self.assertTrue(np.allclose(check1, mf_redux.MedianFilter(kernel_size=3, n=29, input=in1)))
+		self.assertTrue(np.allclose(check2, mf_redux.MedianFilter(kernel_size=3, n=93, input=in2)))
+		self.assertTrue(np.allclose(check3, mf_redux.MedianFilter(kernel_size=3, n=7000, input=in3)))
 
 if __name__ == '__main__':
 	unittest.main()
