@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 # Eventually get this to work over multiple GPUs, hopefully
 import pycuda.driver as cuda
 import pycuda.autoinit
@@ -42,121 +44,10 @@ def MedianFilter(indata=None, ws=3, bw=16, bh=16, n=256, m=0, timing=False, nStr
 
 
 	code = """
-		// X is the 2D image
-
 		#include <stdio.h>
-
-		// From redzhepdx's quick select implementation
-		#define ELEM_SWAP(a,b) {register float t=(a);(a)=(b);(b)=t;}
-
-		__device__ float quickSelectMedian(float *arr, int size)
-		{
-			int low, high;
-			int median;
-			int middle, ll, hh;
-
-			float value;
-
-			low = 0;
-			high = size - 1;
-			median = (low + high) / 2;
-
-			for (int i = 0; i < %(WS)s*%(WS)s; ++i)
-			{
-				if (high <= low) // For 1 elem arrays
-				{
-					value = arr[median];
-					return value;
-				}
-
-				if (high == low + 1) // For 2 elem arrays
-				{
-					if (arr[low] > arr[high])
-					{
-						ELEM_SWAP(arr[low], arr[high]);
-					}
-					value = arr[median];
-					return value;
-				}
-
-				middle = (low + high) / 2;
-
-				if (arr[middle] > arr[high]) ELEM_SWAP(arr[middle], arr[high]);
-				if (arr[low] > arr[high]) ELEM_SWAP(arr[low], arr[high]);
-				if (arr[middle] > arr[low]) ELEM_SWAP(arr[middle], arr[low]);
-
-				ELEM_SWAP(arr[middle], arr[low + 1]);
-
-				ll = low + 1;
-				hh = high;
-
-				while (1)
-				{
-					while (arr[low] > arr[ll])
-						ll++;
-					while (arr[hh] > arr[low])
-						hh--;
-
-					if (hh < ll) break;
-
-					ELEM_SWAP(arr[ll], arr[hh]);
-				}
-
-				ELEM_SWAP(arr[low], arr[hh]);
-
-				if (hh <= median) low = ll;
-				if (hh >= median) high = hh - 1;
-				break;
-			}
-			return 0;
-		}
-
-		__device__ void swap(float &a, float &b)
-		{
-		    float temp = a;
-		    a = b;
-		    b = temp;
-		}
-
-		__device__ float partition(float *arr, int l, int r)
-		{
-			float x = arr[r];
-			int i = l;
-			for (int j = l; j <= r - 1; ++j)
-			{
-				if (arr[j] <= x)
-				{
-					swap(arr[i], arr[r]);
-					++i;
-				}
-			}
-			swap(arr[i], arr[r]);
-			return i;
-		}
-
-		__device__ float kthSmallest(float *arr, int l, int r, int k)
-		{
-			if (k > 0 && k <= r - l + 1)
-			{
-				int index = partition(arr, l, r);
-
-				if (index - l == k - 1)
-					return arr[index];
-
-				if (index - l > k - 1)
-					return kthSmallest(arr, l, index - 1, k);
-
-				return kthSmallest(arr, index + 1, r, k - index + l - 1);
-			}
-
-			return arr[0];
-		}
-
 
 		__global__ void mf(float* in, float* out, int imgWidth, int imgHeight)
 		{
-
-			//__shared__ float tile[18][18];
 
 			float window[%(WS^2)s];
 
@@ -194,6 +85,55 @@ def MedianFilter(indata=None, ws=3, bw=16, bh=16, n=256, m=0, timing=False, nStr
 				}
 			}
 		}
+
+
+
+		__global__ void mf_shared(float* in, float* out, int imgWidth, int imgHeight)
+		{
+			const int TS = 16 + 2 * %(WS/2)s;
+			__shared__ float tile[TS][TS];
+
+			float window[%(WS^2)s];
+
+			const int x_thread_offset = %(BW)s * blockIdx.x + threadIdx.x;
+			const int y_thread_offset = %(BH)s * blockIdx.y + threadIdx.y;
+
+			// Load into the tile for this block
+
+			for (int tx = threadIdx.x; tx < TS; tx += 16)
+			{
+				for (int ty = threadIdx.y; ty < TS; ty += 16)
+				{
+					if ((x_thread_offset + tx - threadIdx.x) < imgWidth && (y_thread_offset + ty - threadIdx.y) < imgHeight)
+					{
+						tile[tx][ty] = in[(x_thread_offset + tx - threadIdx.x) + imgWidth * (y_thread_offset + ty - threadIdx.y)];
+					}
+				}
+			}
+
+
+			for (int y = %(WS/2)s + y_thread_offset; y < imgHeight - %(WS/2)s; y += %(y_stride)s)
+			{
+				for (int x = %(WS/2)s + x_thread_offset; x < imgWidth - %(WS/2)s; x += %(x_stride)s)
+				{
+					// Sort to find the median
+					for (int j = 0; j < %(WS^2)s; ++j)
+					{
+						for (int k = j + 1; k < %(WS^2)s; ++k)
+						{
+							if (window[j] > window[k])
+							{
+								float tmp = window[j];
+								window[j] = window[k];
+								window[k] = tmp;
+							}
+						}
+					}
+					out[y*imgWidth + x] = window[%(WS^2)s/2];
+				}
+			}
+		}
+
 		"""
 
 	code = code % {
@@ -207,7 +147,7 @@ def MedianFilter(indata=None, ws=3, bw=16, bh=16, n=256, m=0, timing=False, nStr
 		}
 
 	mod = SourceModule(code)
-	mf = mod.get_function('mf')
+	mf = mod.get_function('mf_shared')
 
 	indata = np.pad(indata, padding, 'constant', constant_values=0)
 	outdata = np.empty_like(indata)

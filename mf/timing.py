@@ -39,7 +39,6 @@ mf_redux.MedianFilter(ws=9, n=997, timing=True)
 mf_redux.MedianFilter(ws=9, n=997, timing=True)
 mf_redux.MedianFilter(ws=9, n=997, timing=True)
 
-
 ### JUNE 8 11:00 AM ###
 
 # 3x3 window with 73x1 image

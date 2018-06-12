@@ -1,7 +1,3 @@
-""" Modified from 
-'CUDA median Filtering GPU implementation' by Rajeev Verma
-"""
-
 # Eventually get this to work over multiple GPUs, hopefully
 import pycuda.driver as cuda
 import pycuda.autoinit
@@ -9,134 +5,186 @@ from pycuda.compiler import SourceModule
 import numpy as np 
 import scipy.signal as sps
 
-s = cuda.Event()
-e = cuda.Event()
 
-BLOCK_WIDTH = 1
-BLOCK_HEIGHT = 1
+def MedianFilter(indata=None, ws=3, bw=16, bh=16, n=256, m=0, timing=False, nStreams=0):
 
-WINDOW_SIZE = 3
+	BLOCK_WIDTH = bw
+	BLOCK_HEIGHT = bh
 
-padding = WINDOW_SIZE/2
+	WINDOW_SIZE = ws
 
-code = """
+	padding = WINDOW_SIZE/2
 
-	#include <stdio.h>
+	N = np.int32(n)
+	if m == 0:
+		M = np.int32(n)
+	else:
+		M = np.int32(m)
 
-	// X is the 2D image
-	//const int BW = %(BW)s;
-	//const int BH = %(BH)s;
-	const int WS = %(WS)s;
+	#indata = np.array([[2, 80, 6, 3], [2, 80, 6, 3], [2, 80, 6, 3], [2, 80, 6, 3]], dtype=np.float32)
+	if indata is None:
+		indata = np.array(np.random.rand(M, N), dtype=np.float32)
+	else:
+		indata = np.array(indata, dtype=np.float32)
 
-	__global__ void mf_naive(float *in, float *out, int img_width, int img_height)
-	{
+	s = cuda.Event()
+	e = cuda.Event()
+	s.record()
 
-	// Set row and column for thread
 
-	int r = blockIdx.y * blockDim.y + threadIdx.y;
-	int c = blockIdx.x * blockDim.x + threadIdx.x;
+	expanded_N = N + (2 * padding)
+	expanded_M = M + (2 * padding)
 
-	int r_stride = blockDim.y * gridDim.y;
-	int c_stride = blockDim.x * gridDim.x;
+	gridx = max(1, int(np.ceil((expanded_N)/BLOCK_WIDTH)))
+	gridy = max(1, int(np.ceil((expanded_M)/BLOCK_HEIGHT)))
+	grid = (gridx,gridy)
+	block = (BLOCK_WIDTH, BLOCK_HEIGHT, 1)
 
-	float window[WS*WS];   //Take fiter window
 
-	// If the image size is larger than the blocksize, must stride?
-	for (int row = r; row < img_height; row += r_stride)
-	{
-		for (int col = c; col < img_width; col += c_stride)
+	code = """
+		// X is the 2D image
+
+		#include <stdio.h>
+
+		__global__ void mf(float* in, float* out, int imgWidth, int imgHeight)
 		{
-			for (int x = 0; x < WS; x++)
+
+			//__shared__ float tile[18][18];
+
+			float window[%(WS^2)s];
+
+			const int x_thread_offset = %(BW)s * blockIdx.x + threadIdx.x;
+			const int y_thread_offset = %(BH)s * blockIdx.y + threadIdx.y;
+
+			for (int y = %(WS/2)s + y_thread_offset; y < imgHeight - %(WS/2)s; y += %(y_stride)s)
 			{
-				for (int y = 0; y < WS; y++)
+				for (int x = %(WS/2)s + x_thread_offset; x < imgWidth - %(WS/2)s; x += %(x_stride)s)
 				{
-
-					window[x * WS + y] = in[(row + x)*img_width + (col + y)];
-				}
-			}
-
-			for (int i = 0; i < WS*WS; i++) {
-				for (int j = i + 1; j < WS*WS; j++) {
-					if (window[i] > window[j]) { 
-						//Swap the variables.
-						float tmp = window[i];
-						window[i] = window[j];
-						window[j] = tmp;
+					int i = 0;
+					for (int fx = 0; fx < %(WS)s; ++fx)
+					{
+						for (int fy = 0; fy < %(WS)s; ++fy)
+						{
+							window[i] = in[(x + fx - %(WS/2)s) + (y + fy - %(WS/2)s)*imgWidth];
+							i += 1;
+						}
 					}
+
+					// Sort to find the median
+					for (int j = 0; j < %(WS^2)s; ++j)
+					{
+						for (int k = j + 1; k < %(WS^2)s; ++k)
+						{
+							if (window[j] > window[k])
+							{
+								float tmp = window[j];
+								window[j] = window[k];
+								window[k] = tmp;
+							}
+						}
+					}
+					out[y*imgWidth + x] = window[%(WS^2)s/2];
 				}
 			}
-
-			out[row*img_width+col] = window[(WS*WS)/2];   //Set the output variables.
-
 		}
-	}
-}
-	"""
+		"""
 
-code = code % {
-		'BW' : BLOCK_WIDTH,
-		'BH' : BLOCK_HEIGHT,
-		'WS' : WINDOW_SIZE,
-	}
+	code = code % {
+			'BW' : BLOCK_WIDTH,
+			'BH' : BLOCK_HEIGHT,
+			'WS' : WINDOW_SIZE,
+			'WS/2' : WINDOW_SIZE / 2,
+			'WS^2' : WINDOW_SIZE * WINDOW_SIZE,
+			'x_stride' : BLOCK_WIDTH * gridx,
+			'y_stride' : BLOCK_HEIGHT * gridy,
+		}
 
-mod = SourceModule(code)
-mf_naive = mod.get_function('mf_naive')
+	mod = SourceModule(code)
+	mf = mod.get_function('mf')
 
-N = np.int32(1)
+	indata = np.pad(indata, padding, 'constant', constant_values=0)
+	outdata = np.empty_like(indata)
 
-#indata = np.array([[2]], dtype=np.float32)
-indata = np.array([[2, 80, 6, 3], [2, 80, 6, 3], [2, 80, 6, 3], [2, 80, 6, 3]], dtype=np.float32)
-#indata = np.array(np.random.rand(N, N), dtype=np.float32)
-
-s.record()
-# Must pad with zeros in order for this strategy to work
-indata = np.pad(indata, padding, 'constant', constant_values=0)
-outdata = np.ones_like(indata)
+	in_pin = cuda.register_host_memory(indata)
 
 
-in_pin = cuda.register_host_memory(indata)
-out_pin = cuda.register_host_memory(outdata)
+	in_gpu = cuda.mem_alloc(indata.nbytes)
+	out_gpu = cuda.mem_alloc(outdata.nbytes)
 
-in_gpu = cuda.mem_alloc(indata.nbytes)
-out_gpu = cuda.mem_alloc(outdata.nbytes)
+	cuda.memcpy_htod(in_gpu, in_pin)
 
-cuda.memcpy_htod(in_gpu, in_pin)
-# Check to see if this isn't needed because it is empty
-cuda.memcpy_htod(out_gpu, out_pin)
+	mf.prepare("PPii")
+	mf.prepared_call(grid, block, in_gpu, out_gpu, expanded_M, expanded_N)
 
-mf_naive.prepare("PPii")
-
-# N + 2 because pad on all sides with zeros
-gridx = int(np.ceil((N+2*padding)/BLOCK_WIDTH))
-gridy = int(np.ceil((N+2*padding)/BLOCK_HEIGHT))
-grid = (gridx,gridy)
-grid = (1,1)
+	cuda.memcpy_dtoh(outdata, out_gpu)
 
 
+	if (nStreams > 0 and N > nStreams):
+		N = expanded_N/nStreams
+		N_lo = expanded_N % nStreams # leftover if N doesn't divide evenly into the streams
 
-mf_naive.prepared_call( grid, (BLOCK_WIDTH, BLOCK_HEIGHT, 1), in_gpu, out_gpu, N+2*padding, N+2*padding)
+		stream = []
+		in_pin_list = []
+		outdata_list = []
+		in_gpu_list = []
+		out_gpu_list = []
+		for i in xrange(nStreams):
+			stream.append(cuda.Stream())
+
+			if (i < nStreams - 1):
+				a = indata[i*N:(i+1)*N]
+				in_pin_list.append(a)
+				outdata_list.append(np.empty_like(a))
+
+			else:
+				a = indata[i*N:]
+				in_pin_list.append(a)
+				outdata_list.append(np.empty_like(a))
+
+			in_gpu_list.append(cuda.mem_alloc(in_pin_list[i].nbytes))
+			out_gpu_list.append(cuda.mem_alloc(outdata_list[i].nbytes))
+
+		for i in xrange(nStreams + 2):
+			ii = i - 1
+			iii = i - 2
+
+			if 0 <= iii < nStreams:
+				st = stream[iii]
+				cuda.memcpy_dtoh_async(in_pin_list[iii], in_gpu_list[iii], stream=st)
+				cuda.memcpy_htod_async(out_gpu_list[iii], outdata_list[iii], stream=st)
+
+			if 0 <= ii < nStreams:
+				st = stream[ii]
+				if ii < nStreams - 1:
+					mf(in_gpu_list[ii], outdata_list[ii], expanded_M, N, grid=grid, block=block, stream=st)
+				else:
+					mf(in_gpu_list[ii], outdata_list[ii], expanded_M, N + N_lo, grid=grid, block=block, stream=st)
+
+			if 0 <= i < nStreams:
+				st = stream[i]
+				cuda.memcpy_htod_async(in_gpu_list[i], in_pin_list[i], stream=st)
+				
+
+		outdata = np.concatenate(outdata_list, axis=1)
 
 
-cuda.memcpy_dtoh(out_pin, out_gpu)
+	if (padding > 0):
+		outdata = outdata[padding:-padding, padding:-padding]
 
-e.record()
-e.synchronize()
-#print s.time_till(e), "ms"
-
-
-s.record()
-true_ans= sps.medfilt2d(indata, (WINDOW_SIZE, WINDOW_SIZE))
-e.record()
-e.synchronize()
-#print s.time_till(e), "ms"
+	if (timing):
+		e.record()
+		e.synchronize()
+		print "THIS FUNCTION: ", s.time_till(e), "ms"
 
 
-if (padding > 0):
-	out_pin = out_pin[padding:-padding, padding:-padding]
-	true_ans = true_ans[padding:-padding, padding:-padding]
+		s.record()
+		true_ans= sps.medfilt2d(indata, (WINDOW_SIZE, WINDOW_SIZE))
+		e.record()
+		e.synchronize()
+		print "SCIPY MEDFILT", s.time_till(e), "ms"
 
-# print np.allclose(out_pin, true_ans)
-# print "CUDA OUTPUT"
-# print out_pin
-# print "SCIPY MEDFILT OUTPUT"
-# print true_ans
+	return outdata
+
+	# return np.allclose(out_pin, true_ans)
+	# print out_pin
+	# print true_ans
