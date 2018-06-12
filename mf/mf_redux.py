@@ -32,17 +32,11 @@ def MedianFilter(indata=None, ws=3, bw=16, bh=16, n=256, m=0, timing=False, nStr
 	s.record()
 
 
-	expanded_N = N + (2 * padding)
-	expanded_M = M + (2 * padding)
-
-	gridx = max(1, int(np.ceil((expanded_N)/BLOCK_WIDTH)))
-	gridy = max(1, int(np.ceil((expanded_M)/BLOCK_HEIGHT)))
-	grid = (gridx,gridy)
-	block = (BLOCK_WIDTH, BLOCK_HEIGHT, 1)
-
-
 	code = """
 		// X is the 2D image
+		const int BW = %(BW)s;
+		const int BH = %(BH)s;
+		const int WS = %(WS)s;
 
 		// From redzhepdx's quick select implementation
 		#define ELEM_SWAP(a,b) {register float t=(a);(a)=(b);(b)=t;}
@@ -59,7 +53,7 @@ def MedianFilter(indata=None, ws=3, bw=16, bh=16, n=256, m=0, timing=False, nStr
 			high = size - 1;
 			median = (low + high) / 2;
 
-			for (int i = 0; i < %(WS)s*%(WS)s; ++i)
+			for (int i = 0; i < WS*WS; ++i)
 			{
 				if (high <= low) // For 1 elem arrays
 				{
@@ -112,32 +106,38 @@ def MedianFilter(indata=None, ws=3, bw=16, bh=16, n=256, m=0, timing=False, nStr
 
 		__global__ void mf(float* in, float* out, int imgWidth, int imgHeight)
 		{
+			const int med = (WS*WS)/2;
 
-			//__shared__ float tile[18][18];
+			float window[WS*WS];
 
-			float window[%(WS^2)s];
+			const int edgex = WS/2; // window width / 2
+			const int edgey = WS/2; // window height / 2
 
-			const int x_thread_offset = %(BW)s * blockIdx.x + threadIdx.x;
-			const int y_thread_offset = %(BH)s * blockIdx.y + threadIdx.y;
+			const int x_thread_offset = BW * blockIdx.x + threadIdx.x;
+			const int y_thread_offset = BH * blockIdx.y + threadIdx.y;
 
-			for (int y = %(WS/2)s + y_thread_offset; y < imgHeight - %(WS/2)s; y += %(y_stride)s)
+			const int x_stride = BW * gridDim.x;
+			const int y_stride = BH * gridDim.y;
+
+
+			for (int y = edgey + y_thread_offset; y < imgHeight - edgey; y += y_stride)
 			{
-				for (int x = %(WS/2)s + x_thread_offset; x < imgWidth - %(WS/2)s; x += %(x_stride)s)
+				for (int x = edgex + x_thread_offset; x < imgWidth - edgex; x += x_stride)
 				{
 					int i = 0;
-					for (int fx = 0; fx < %(WS)s; ++fx)
+					for (int fx = 0; fx < WS; ++fx)
 					{
-						for (int fy = 0; fy < %(WS)s; ++fy)
+						for (int fy = 0; fy < WS; ++fy)
 						{
-							window[i] = in[(x + fx - %(WS/2)s) + (y + fy - %(WS/2)s)*imgWidth];
+							window[i] = in[(x + fx - edgex) + (y + fy - edgey)*imgWidth];
 							i += 1;
 						}
 					}
 
 					// Sort to find the median
-					for (int j = 0; j < %(WS^2)s; ++j)
+					for (int j = 0; j < WS*WS; ++j)
 					{
-						for (int k = j + 1; k < %(WS^2)s; ++k)
+						for (int k = j + 1; k < WS*WS; ++k)
 						{
 							if (window[j] > window[k])
 							{
@@ -147,7 +147,7 @@ def MedianFilter(indata=None, ws=3, bw=16, bh=16, n=256, m=0, timing=False, nStr
 							}
 						}
 					}
-					out[y*imgWidth + x] = window[%(WS^2)s/2];
+					out[y*imgWidth + x] = window[med];
 				}
 			}
 		}
@@ -157,10 +157,6 @@ def MedianFilter(indata=None, ws=3, bw=16, bh=16, n=256, m=0, timing=False, nStr
 			'BW' : BLOCK_WIDTH,
 			'BH' : BLOCK_HEIGHT,
 			'WS' : WINDOW_SIZE,
-			'WS/2' : WINDOW_SIZE / 2,
-			'WS^2' : WINDOW_SIZE * WINDOW_SIZE,
-			'x_stride' : BLOCK_WIDTH * gridx,
-			'y_stride' : BLOCK_HEIGHT * gridy,
 		}
 
 	mod = SourceModule(code)
@@ -203,7 +199,13 @@ def MedianFilter(indata=None, ws=3, bw=16, bh=16, n=256, m=0, timing=False, nStr
 
 	mf.prepare("PPii")
 
+	expanded_N = N + (2 * padding)
+	expanded_M = M + (2 * padding)
 
+	gridx = max(1, int(np.ceil((expanded_N)/BLOCK_WIDTH)))
+	gridy = max(1, int(np.ceil((expanded_M)/BLOCK_HEIGHT)))
+	grid = (gridx,gridy)
+	block = (BLOCK_WIDTH, BLOCK_HEIGHT, 1)
 	
 	mf.prepared_call(grid, block, in_gpu, out_gpu, expanded_M, expanded_N)
 
