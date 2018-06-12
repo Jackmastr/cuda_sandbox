@@ -44,8 +44,6 @@ def MedianFilter(indata=None, ws=3, bw=16, bh=16, n=256, m=0, timing=False, nStr
 	code = """
 		// X is the 2D image
 
-		#include <stdio.h>
-
 		// From redzhepdx's quick select implementation
 		#define ELEM_SWAP(a,b) {register float t=(a);(a)=(b);(b)=t;}
 
@@ -111,47 +109,6 @@ def MedianFilter(indata=None, ws=3, bw=16, bh=16, n=256, m=0, timing=False, nStr
 			return 0;
 		}
 
-		__device__ void swap(float &a, float &b)
-		{
-		    float temp = a;
-		    a = b;
-		    b = temp;
-		}
-
-		__device__ float partition(float *arr, int l, int r)
-		{
-			float x = arr[r];
-			int i = l;
-			for (int j = l; j <= r - 1; ++j)
-			{
-				if (arr[j] <= x)
-				{
-					swap(arr[i], arr[r]);
-					++i;
-				}
-			}
-			swap(arr[i], arr[r]);
-			return i;
-		}
-
-		__device__ float kthSmallest(float *arr, int l, int r, int k)
-		{
-			if (k > 0 && k <= r - l + 1)
-			{
-				int index = partition(arr, l, r);
-
-				if (index - l == k - 1)
-					return arr[index];
-
-				if (index - l > k - 1)
-					return kthSmallest(arr, l, index - 1, k);
-
-				return kthSmallest(arr, index + 1, r, k - index + l - 1);
-			}
-
-			return arr[0];
-		}
-
 
 		__global__ void mf(float* in, float* out, int imgWidth, int imgHeight)
 		{
@@ -210,73 +167,51 @@ def MedianFilter(indata=None, ws=3, bw=16, bh=16, n=256, m=0, timing=False, nStr
 	mf = mod.get_function('mf')
 
 	indata = np.pad(indata, padding, 'constant', constant_values=0)
-	outdata = np.empty_like(indata)
+	outdata = np.ones_like(indata)
 
 	in_pin = cuda.register_host_memory(indata)
+	out_pin = cuda.register_host_memory(outdata)
+
+	if (nStreams > 0):
+		N = N/nStreams
+		N_lo = N % nStreams# leftover if N doesn't divide evenly into the streams
+
+		stream = []
+		indata_list = []
+		outdata_list = []
+		for i in xrange(nStreams):
+			stream.append(cuda.Stream())
+
+			indata_list.append(indata[i*N:(i+1)*N])
+			outdata_list.append(outdata[i*N:(i+1)*N])
+
+			if (i == nStreams - 1):
+				indata_list[i] = np.concatenate(indata_list[i], indata[(i+1)*N:])
+				outdata_list[i] = np.concatenate(outdata_list[i], outdata[(i+1)*N:])
+
+
+
+
 
 
 	in_gpu = cuda.mem_alloc(indata.nbytes)
 	out_gpu = cuda.mem_alloc(outdata.nbytes)
 
 	cuda.memcpy_htod(in_gpu, in_pin)
+	# Check to see if this isn't needed because it is empty
+	cuda.memcpy_htod(out_gpu, out_pin)
 
 	mf.prepare("PPii")
+
+
+	
 	mf.prepared_call(grid, block, in_gpu, out_gpu, expanded_M, expanded_N)
 
-	cuda.memcpy_dtoh(outdata, out_gpu)
 
-
-	if (nStreams > 0 and N > nStreams):
-		N = expanded_N/nStreams
-		N_lo = expanded_N % nStreams # leftover if N doesn't divide evenly into the streams
-
-		stream = []
-		in_pin_list = []
-		outdata_list = []
-		in_gpu_list = []
-		out_gpu_list = []
-		for i in xrange(nStreams):
-			stream.append(cuda.Stream())
-
-			if (i < nStreams - 1):
-				a = indata[i*N:(i+1)*N]
-				in_pin_list.append(a)
-				outdata_list.append(np.empty_like(a))
-
-			else:
-				a = indata[i*N:]
-				in_pin_list.append(a)
-				outdata_list.append(np.empty_like(a))
-
-			in_gpu_list.append(cuda.mem_alloc(in_pin_list[i].nbytes))
-			out_gpu_list.append(cuda.mem_alloc(outdata_list[i].nbytes))
-
-		for i in xrange(nStreams + 2):
-			ii = i - 1
-			iii = i - 2
-
-			if 0 <= iii < nStreams:
-				st = stream[iii]
-				cuda.memcpy_dtoh_async(in_pin_list[iii], in_gpu_list[iii], stream=st)
-				cuda.memcpy_htod_async(out_gpu_list[iii], outdata_list[iii], stream=st)
-
-			if 0 <= ii < nStreams:
-				st = stream[ii]
-				if ii < nStreams - 1:
-					mf(in_gpu_list[ii], outdata_list[ii], expanded_M, N, grid=grid, block=block, stream=st)
-				else:
-					mf(in_gpu_list[ii], outdata_list[ii], expanded_M, N + N_lo, grid=grid, block=block, stream=st)
-
-			if 0 <= i < nStreams:
-				st = stream[i]
-				cuda.memcpy_htod_async(in_gpu_list[i], in_pin_list[i], stream=st)
-				
-
-		outdata = np.concatenate(outdata_list, axis=1)
-
+	cuda.memcpy_dtoh(out_pin, out_gpu)
 
 	if (padding > 0):
-		outdata = outdata[padding:-padding, padding:-padding]
+		out_pin = out_pin[padding:-padding, padding:-padding]
 
 	if (timing):
 		e.record()
@@ -290,7 +225,7 @@ def MedianFilter(indata=None, ws=3, bw=16, bh=16, n=256, m=0, timing=False, nStr
 		e.synchronize()
 		print "SCIPY MEDFILT", s.time_till(e), "ms"
 
-	return outdata
+	return out_pin
 
 	# return np.allclose(out_pin, true_ans)
 	# print out_pin
