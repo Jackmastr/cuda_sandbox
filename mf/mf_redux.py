@@ -37,8 +37,8 @@ def MedianFilter(indata=None, ws=3, bw=16, bh=16, n=256, m=0, timing=False, nStr
 	expanded_N = N + (2 * padding)
 	expanded_M = M + (2 * padding)
 
-	gridx = max(1, int(np.ceil((expanded_N)/BLOCK_WIDTH)))
-	gridy = max(1, int(np.ceil((expanded_M)/BLOCK_HEIGHT)))
+	gridx = max(1, int(np.ceil((expanded_N)/BLOCK_WIDTH))+1)
+	gridy = max(1, int(np.ceil((expanded_M)/BLOCK_HEIGHT))+1)
 	grid = (gridx,gridy)
 	block = (BLOCK_WIDTH, BLOCK_HEIGHT, 1)
 
@@ -111,11 +111,24 @@ def MedianFilter(indata=None, ws=3, bw=16, bh=16, n=256, m=0, timing=False, nStr
 				}
 			}
 
+			__syncthreads();
 
 			for (int y = %(WS/2)s + y_thread_offset; y < imgHeight - %(WS/2)s; y += %(y_stride)s)
 			{
 				for (int x = %(WS/2)s + x_thread_offset; x < imgWidth - %(WS/2)s; x += %(x_stride)s)
 				{
+				
+					int i = 0;
+					for (int fx = 0; fx < %(WS)s; ++fx)
+					{
+						for (int fy = 0; fy < %(WS)s; ++fy)
+						{
+							window[i] = tile[threadIdx.x + fx][threadIdx.y + fy];
+							i += 1;
+						}
+					}
+
+
 					// Sort to find the median
 					for (int j = 0; j < %(WS^2)s; ++j)
 					{
