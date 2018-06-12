@@ -6,16 +6,19 @@ import mf_redux
 class StreamTest(unittest.TestCase):
 	def testStreams(self):
 		""" Test using streams """
+		in99 = np.random.rand(9,9)
 		in0 = np.random.rand(1, 73)
 		in1 = np.random.rand(5, 3)
 		in2 = np.random.rand(2, 3)
 		in3 = np.random.rand(8013, 700)
 
+		check99 = sps.medfilt2d(in99, 1)
 		check0 = sps.medfilt2d(in0, 1)
 		check1 = sps.medfilt2d(in1, 1)
 		check2 = sps.medfilt2d(in2, 3)
 		check3 = sps.medfilt2d(in3, 5)
 
+		self.assertTrue(np.allclose(check99, mf_redux.MedianFilter(ws=1, n=9, indata=in99, nStreams=3, bh=1, bw=1 )))
 		self.assertTrue(np.allclose(check0, mf_redux.MedianFilter(ws=1, n=1, m=73, indata=in0, nStreams=3 )))
 		self.assertTrue(np.allclose(check1, mf_redux.MedianFilter(ws=1, n=5, m=3, indata=in1, nStreams=3)))
 		self.assertTrue(np.allclose(check2, mf_redux.MedianFilter(ws=3, n=2, m=3, indata=in2, nStreams=6)))

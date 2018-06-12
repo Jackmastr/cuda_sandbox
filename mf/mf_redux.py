@@ -117,7 +117,7 @@ def MedianFilter(indata=None, ws=3, bw=16, bh=16, n=256, m=0, timing=False, nStr
 			{
 				for (int x = %(WS/2)s + x_thread_offset; x < imgWidth - %(WS/2)s; x += %(x_stride)s)
 				{
-				
+
 					int i = 0;
 					for (int fx = 0; fx < %(WS)s; ++fx)
 					{
@@ -160,7 +160,7 @@ def MedianFilter(indata=None, ws=3, bw=16, bh=16, n=256, m=0, timing=False, nStr
 		}
 
 	mod = SourceModule(code)
-	mf = mod.get_function('mf_shared')
+	mf = mod.get_function('mf')
 
 	indata = np.pad(indata, padding, 'constant', constant_values=0)
 	outdata = np.empty_like(indata)
@@ -237,11 +237,11 @@ def MedianFilter(indata=None, ws=3, bw=16, bh=16, n=256, m=0, timing=False, nStr
 		print "THIS FUNCTION: ", s.time_till(e), "ms"
 
 
-		s.record()
-		true_ans= sps.medfilt2d(indata, (WINDOW_SIZE, WINDOW_SIZE))
-		e.record()
-		e.synchronize()
-		print "SCIPY MEDFILT", s.time_till(e), "ms"
+		# s.record()
+		# true_ans= sps.medfilt2d(indata, (WINDOW_SIZE, WINDOW_SIZE))
+		# e.record()
+		# e.synchronize()
+		# print "SCIPY MEDFILT", s.time_till(e), "ms"
 
 	return outdata
 
