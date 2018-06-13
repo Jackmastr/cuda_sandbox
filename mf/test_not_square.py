@@ -21,7 +21,8 @@ class NotSquareTest(unittest.TestCase):
 		self.assertTrue(np.allclose(check2, mf_redux.MedianFilter(kernel_size=3, n=2, m=3, input=in2)))
 		self.assertTrue(np.allclose(check3, mf_redux.MedianFilter(kernel_size=5, n=8013, m=700, input=in3)))
 
-	def TestLopsidedWindow(self):
+	def testLopsidedWindow(self):
+		""" Test using non-square windows """
 		in0 = np.random.rand(1, 73)
 		in1 = np.random.rand(5, 3)
 		in2 = np.random.rand(2, 3)
@@ -31,6 +32,12 @@ class NotSquareTest(unittest.TestCase):
 		check1 = sps.medfilt2d(in1, (11, 1))
 		check2 = sps.medfilt2d(in2, (3, 5))
 		check3 = sps.medfilt2d(in3, (9, 5))
+
+		self.assertTrue(np.allclose(check0, mf_redux.MedianFilter(kernel_size=(1, 11), n=1, m=73, input=in0)))
+		self.assertTrue(np.allclose(check1, mf_redux.MedianFilter(kernel_size=(11, 1), n=5, m=3, input=in1)))
+		self.assertTrue(np.allclose(check2, mf_redux.MedianFilter(kernel_size=(3, 5), n=2, m=3, input=in2)))
+		self.assertTrue(np.allclose(check3, mf_redux.MedianFilter(kernel_size=(9, 5), n=8013, m=700, input=in3)))
+		self.assertTrue(False)
 
 
 if __name__ == '__main__':
