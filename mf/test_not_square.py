@@ -37,7 +37,6 @@ class NotSquareTest(unittest.TestCase):
 		self.assertTrue(np.allclose(check1, mf_redux.MedianFilter(kernel_size=(11, 1), n=5, m=3, input=in1)))
 		self.assertTrue(np.allclose(check2, mf_redux.MedianFilter(kernel_size=(3, 5), n=2, m=3, input=in2)))
 		self.assertTrue(np.allclose(check3, mf_redux.MedianFilter(kernel_size=(9, 5), n=8013, m=700, input=in3)))
-		self.assertTrue(False)
 
 
 if __name__ == '__main__':

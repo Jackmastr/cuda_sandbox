@@ -1,4 +1,9 @@
+#!/usr/bin/env python
+
 # Eventually get this to work over multiple GPUs, hopefully
+
+# Test without using so many format stream tricks, it may be making it slower
+
 import pycuda.driver as cuda
 import pycuda.autoinit
 from pycuda.compiler import SourceModule
@@ -6,14 +11,19 @@ import numpy as np
 import scipy.signal as sps
 
 
-def MedianFilter(indata=None, ws=3, bw=16, bh=16, n=256, m=0, timing=False, nStreams=0):
+def MedianFilter(input=None, kernel_size=3, bw=16, bh=16, n=256, m=0, timing=False, nStreams=0):
 
 	BLOCK_WIDTH = bw
 	BLOCK_HEIGHT = bh
 
-	WINDOW_SIZE = ws
+	WINDOW_SIZE = kernel_size
 
-	padding = WINDOW_SIZE/2
+	if isinstance(kernel_size, (int, long)):
+		kernel_size = [kernel_size]*2
+
+	WS_x, WS_y = kernel_size
+	padding_y = WS_x/2
+	padding_x = WS_y/2
 
 	N = np.int32(n)
 	if m == 0:
@@ -22,58 +32,54 @@ def MedianFilter(indata=None, ws=3, bw=16, bh=16, n=256, m=0, timing=False, nStr
 		M = np.int32(m)
 
 	#indata = np.array([[2, 80, 6, 3], [2, 80, 6, 3], [2, 80, 6, 3], [2, 80, 6, 3]], dtype=np.float32)
-	if indata is None:
+	if input is None:
 		indata = np.array(np.random.rand(M, N), dtype=np.float32)
 	else:
-		indata = np.array(indata, dtype=np.float32)
+		indata = np.array(input, dtype=np.float32)
 
 	s = cuda.Event()
 	e = cuda.Event()
 	s.record()
 
 
-	expanded_N = N + (2 * padding)
-	expanded_M = M + (2 * padding)
+	expanded_N = N + (2 * padding_y)
+	expanded_M = M + (2 * padding_x)
 
-	gridx = max(1, int(np.ceil((expanded_N)/BLOCK_WIDTH)))
-	gridy = max(1, int(np.ceil((expanded_M)/BLOCK_HEIGHT)))
+	gridx = max(1, int(np.ceil((expanded_N)/BLOCK_WIDTH))+1)
+	gridy = max(1, int(np.ceil((expanded_M)/BLOCK_HEIGHT))+1)
 	grid = (gridx,gridy)
 	block = (BLOCK_WIDTH, BLOCK_HEIGHT, 1)
 
 
 	code = """
-		// X is the 2D image
-
 		#include <stdio.h>
 
-		__global__ void mf(float* in, float* out, int imgWidth, int imgHeight)
+		__global__ void mf(float* in, float* out, int imgWidth, int imgHeight, int ws)
 		{
+			int ws_sq = ws * ws;
+			float window[81];
 
-			//__shared__ float tile[18][18];
+			const int x_thread_offset = 16 * blockIdx.x + threadIdx.x;
+			const int y_thread_offset = 16 * blockIdx.y + threadIdx.y;
 
-			float window[%(WS^2)s];
-
-			const int x_thread_offset = %(BW)s * blockIdx.x + threadIdx.x;
-			const int y_thread_offset = %(BH)s * blockIdx.y + threadIdx.y;
-
-			for (int y = %(WS/2)s + y_thread_offset; y < imgHeight - %(WS/2)s; y += %(y_stride)s)
+			for (int y = ws/2 + y_thread_offset; y < imgHeight - ws/2; y += 16 * gridDim.y)
 			{
-				for (int x = %(WS/2)s + x_thread_offset; x < imgWidth - %(WS/2)s; x += %(x_stride)s)
+				for (int x = ws/2 + x_thread_offset; x < imgWidth - ws/2; x += 16 * gridDim.x)
 				{
 					int i = 0;
-					for (int fx = 0; fx < %(WS)s; ++fx)
+					for (int fx = 0; fx < ws; ++fx)
 					{
-						for (int fy = 0; fy < %(WS)s; ++fy)
+						for (int fy = 0; fy < ws; ++fy)
 						{
-							window[i] = in[(x + fx - %(WS/2)s) + (y + fy - %(WS/2)s)*imgWidth];
+							window[i] = in[(x + fx - ws/2) + (y + fy - ws/2)*imgWidth];
 							i += 1;
 						}
 					}
 
 					// Sort to find the median
-					for (int j = 0; j < %(WS^2)s; ++j)
+					for (int j = 0; j < ws_sq; ++j)
 					{
-						for (int k = j + 1; k < %(WS^2)s; ++k)
+						for (int k = j + 1; k < ws_sq; ++k)
 						{
 							if (window[j] > window[k])
 							{
@@ -83,40 +89,46 @@ def MedianFilter(indata=None, ws=3, bw=16, bh=16, n=256, m=0, timing=False, nStr
 							}
 						}
 					}
-					out[y*imgWidth + x] = window[%(WS^2)s/2];
+					out[y*imgWidth + x] = window[ws_sq/2];
 				}
 			}
 		}
+
 		"""
-
-	code = code % {
-			'BW' : BLOCK_WIDTH,
-			'BH' : BLOCK_HEIGHT,
-			'WS' : WINDOW_SIZE,
-			'WS/2' : WINDOW_SIZE / 2,
-			'WS^2' : WINDOW_SIZE * WINDOW_SIZE,
-			'x_stride' : BLOCK_WIDTH * gridx,
-			'y_stride' : BLOCK_HEIGHT * gridy,
-		}
-
+	# s.record()
 	mod = SourceModule(code)
 	mf = mod.get_function('mf')
+	e.record()
+	# e.synchronize()
+	# print s.time_till(e), "ms"
 
-	indata = np.pad(indata, padding, 'constant', constant_values=0)
+	indata = np.pad(indata, ( (padding_y, padding_y), (padding_x, padding_x) ), 'constant', constant_values=0)
 	outdata = np.empty_like(indata)
 
-	in_pin = cuda.register_host_memory(indata)
 
+
+	in_pin = cuda.register_host_memory(indata)
+	out_pin = cuda.register_host_memory(outdata)
 
 	in_gpu = cuda.mem_alloc(indata.nbytes)
 	out_gpu = cuda.mem_alloc(outdata.nbytes)
 
-	cuda.memcpy_htod(in_gpu, in_pin)
+	# s.record()
+	cuda.memcpy_htod_async(in_gpu, in_pin)
+	# e.record()
+	# e.synchronize()
+	# print s.time_till(e), "ms"
 
+
+	# s.record()
 	mf.prepare("PPii")
-	mf.prepared_call(grid, block, in_gpu, out_gpu, expanded_M, expanded_N)
+	mf.prepared_call(grid, block, in_gpu, out_gpu, expanded_M, expanded_N, WINDOW_SIZE)
+	# e.record()
+	# e.synchronize()
+	# print s.time_till(e), "ms"
 
-	cuda.memcpy_dtoh(outdata, out_gpu)
+
+	cuda.memcpy_dtoh(out_pin, out_gpu)
 
 
 	if (nStreams > 0 and N > nStreams):
@@ -132,7 +144,7 @@ def MedianFilter(indata=None, ws=3, bw=16, bh=16, n=256, m=0, timing=False, nStr
 			stream.append(cuda.Stream())
 
 			if (i < nStreams - 1):
-				a = indata[i*N:(i+1)*N]
+				a = indata[i*N:(i+1)*N + WINDOW_SIZE/2]
 				in_pin_list.append(a)
 				outdata_list.append(np.empty_like(a))
 
@@ -164,12 +176,16 @@ def MedianFilter(indata=None, ws=3, bw=16, bh=16, n=256, m=0, timing=False, nStr
 				st = stream[i]
 				cuda.memcpy_htod_async(in_gpu_list[i], in_pin_list[i], stream=st)
 				
+		print outdata_list
+		#outdata = np.concatenate(outdata_list, axis=1)
 
-		outdata = np.concatenate(outdata_list, axis=1)
 
 
-	if (padding > 0):
-		outdata = outdata[padding:-padding, padding:-padding]
+
+	if (padding_y > 0):
+		outdata = outdata[padding_y:-padding_y]
+	if (padding_x > 0):
+		outdata = outdata[:, padding_x:-padding_x]
 
 	if (timing):
 		e.record()
@@ -178,7 +194,7 @@ def MedianFilter(indata=None, ws=3, bw=16, bh=16, n=256, m=0, timing=False, nStr
 
 
 		s.record()
-		true_ans= sps.medfilt2d(indata, (WINDOW_SIZE, WINDOW_SIZE))
+		true_ans= sps.medfilt2d(indata, (WS_x, WS_y))
 		e.record()
 		e.synchronize()
 		print "SCIPY MEDFILT", s.time_till(e), "ms"

@@ -1,6 +1,9 @@
 #!/usr/bin/env python
 
 # Eventually get this to work over multiple GPUs, hopefully
+
+# Test without using so many format stream tricks, it may be making it slower
+
 import pycuda.driver as cuda
 import pycuda.autoinit
 from pycuda.compiler import SourceModule
@@ -45,7 +48,6 @@ def MedianFilter(input=None, kernel_size=3, bw=16, bh=16, n=256, m=0, timing=Fal
 	gridx = max(1, int(np.ceil((expanded_N)/BLOCK_WIDTH))+1)
 	gridy = max(1, int(np.ceil((expanded_M)/BLOCK_HEIGHT))+1)
 	grid = (gridx,gridy)
-	grid=(1,1)
 	block = (BLOCK_WIDTH, BLOCK_HEIGHT, 1)
 
 
@@ -60,16 +62,16 @@ def MedianFilter(input=None, kernel_size=3, bw=16, bh=16, n=256, m=0, timing=Fal
 			const int x_thread_offset = %(BW)s * blockIdx.x + threadIdx.x;
 			const int y_thread_offset = %(BH)s * blockIdx.y + threadIdx.y;
 
-			for (int y = %(WSy/2)s + y_thread_offset; y < imgHeight - %(WSy/2)s; y += %(y_stride)s)
+			for (int y = %(WSx/2)s + y_thread_offset; y < imgHeight - %(WSx/2)s; y += %(y_stride)s)
 			{
-				for (int x = %(WSx/2)s + x_thread_offset; x < imgWidth - %(WSx/2)s; x += %(x_stride)s)
+				for (int x = %(WSy/2)s + x_thread_offset; x < imgWidth - %(WSy/2)s; x += %(x_stride)s)
 				{
 					int i = 0;
-					for (int fx = 0; fx < %(WSx)s; ++fx)
+					for (int fx = 0; fx < %(WSy)s; ++fx)
 					{
-						for (int fy = 0; fy < %(WSy)s; ++fy)
+						for (int fy = 0; fy < %(WSx)s; ++fy)
 						{
-							window[i] = in[(x + fx - %(WSx/2)s) + (y + fy - %(WSy/2)s)*imgWidth];
+							window[i] = in[(x + fx - %(WSy/2)s) + (y + fy - %(WSx/2)s)*imgWidth];
 							i += 1;
 						}
 					}
@@ -166,13 +168,17 @@ def MedianFilter(input=None, kernel_size=3, bw=16, bh=16, n=256, m=0, timing=Fal
 			'WSx/2' : WS_x/2,
 			'WSy/2' : WS_y/2
 		}
-
+	# s.record()
 	mod = SourceModule(code)
 	mf = mod.get_function('mf')
-
+	# e.record()
+	# e.synchronize()
+	# print s.time_till(e), "ms"
 
 	indata = np.pad(indata, ( (padding_y, padding_y), (padding_x, padding_x) ), 'constant', constant_values=0)
 	outdata = np.empty_like(indata)
+
+
 
 	in_pin = cuda.register_host_memory(indata)
 	out_pin = cuda.register_host_memory(outdata)
@@ -180,7 +186,12 @@ def MedianFilter(input=None, kernel_size=3, bw=16, bh=16, n=256, m=0, timing=Fal
 	in_gpu = cuda.mem_alloc(indata.nbytes)
 	out_gpu = cuda.mem_alloc(outdata.nbytes)
 
+	# s.record()
 	cuda.memcpy_htod_async(in_gpu, in_pin)
+	# e.record()
+	# e.synchronize()
+	# print s.time_till(e), "ms"
+
 
 	# s.record()
 	mf.prepare("PPii")

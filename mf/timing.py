@@ -32,12 +32,12 @@ mf_redux.MedianFilter(kernel_size=3, n=93, timing=True)
 
 
 
-print "\n9x9 window with 997x997 image"
+print "\n9x9 window with 600x1024 image"
 
-mf_redux.MedianFilter(kernel_size=9, n=997, timing=True)
-mf_redux.MedianFilter(kernel_size=9, n=997, timing=True)
-mf_redux.MedianFilter(kernel_size=9, n=997, timing=True)
-mf_redux.MedianFilter(kernel_size=9, n=997, timing=True)
+mf_redux.MedianFilter(kernel_size=9, n=600, m=1024, timing=True)
+mf_redux.MedianFilter(kernel_size=9, n=600, m=1024, timing=True)
+mf_redux.MedianFilter(kernel_size=9, n=600, m=1024, timing=True)
+mf_redux.MedianFilter(kernel_size=9, n=600, m=1024, timing=True)
 
 # print "\n3x3 window with 9997x9997 image"
 
