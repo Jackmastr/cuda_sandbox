@@ -8,12 +8,12 @@ class DebugTest(unittest.TestCase):
 		""" Test that makes it easier to find the problem in cuda-gdb """
 		in0 = np.array([[2, 80, 6, 3], [2, 80, 6, 3], [2, 80, 6, 3], [2, 80, 6, 3]], dtype=np.float32)
 
-		check0 = sps.medfilt2d(in0, (3,1))
+		check0 = sps.medfilt2d(in0, 3)
 
-		# print check0
-		# print mf_redux.MedianFilter(kernel_size=(3, 1), n=4, input=in0)
+		print check0
+		print mf_redux.MedianFilter(kernel_size=3, n=4, input_list=[in0]*3, nStreams=3)[0]
 
-		self.assertTrue(np.allclose(check0, mf_redux.MedianFilter(kernel_size=(3,1), n=4, input=in0)))
+		self.assertTrue(np.allclose(check0, mf_redux.MedianFilter(kernel_size=3, n=4, input_list=[in0, in0, in0], nStreams=3)[0]))
 
 if __name__ == '__main__':
 	unittest.main()
