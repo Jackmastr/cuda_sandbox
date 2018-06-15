@@ -52,6 +52,88 @@ def MedianFilter(input=None, kernel_size=3, bw=16, bh=16, n=256, m=0, timing=Fal
 
 	code = """
 		#include <stdio.h>
+		#pragma comment(linker, "/HEAP:2000000")
+
+		__device__ float FloydWirth_kth(float arr[], const int length, const int kTHvalue) 
+		{
+		#define F_SWAP(a,b) { float temp=(a);(a)=(b);(b)=temp; }
+		#define SIGNUM(x) ((x) < 0 ? -1 : ((x) > 0 ? 1 : (x)))
+
+		    int left = 0;       
+		    int right = length - 1;     
+		    int left2 = 0;
+		    int right2 = length - 1;
+
+		    //while (left < right)
+		    while (left < right) 
+		    {           
+		        if( arr[right2] < arr[left2] ) F_SWAP(arr[left2],arr[right2]);
+		        if( arr[right2] < arr[kTHvalue] ) F_SWAP(arr[kTHvalue],arr[right2]);
+		        if( arr[kTHvalue] < arr[left2] ) F_SWAP(arr[left2],arr[kTHvalue]);
+
+		        int rightleft = right - left;
+
+		        if (rightleft < kTHvalue)
+		        {
+		            int n = right - left + 1;
+		            int ii = kTHvalue - left + 1;
+		            int s = (n + n) / 3;
+		            int sd = (n * s * (n - s) / n) * SIGNUM(ii - n / 2);
+		            int left2 = max(left, kTHvalue - ii * s / n + sd);
+		            int right2 = min(right, kTHvalue + (n - ii) * s / n + sd);              
+		        }
+
+		        float x=arr[kTHvalue];
+
+		        while ((right2 > kTHvalue) && (left2 < kTHvalue))
+		        {
+		            do 
+		            {
+		                left2++;
+		            }while (arr[left2] < x);
+
+		            do
+		            {
+		                right2--;
+		            }while (arr[right2] > x);
+
+		            //F_SWAP(arr[left2],arr[right2]);
+		            F_SWAP(arr[left2],arr[right2]);
+		        }
+		        left2++;
+		        right2--;
+
+		        if (right2 < kTHvalue) 
+		        {
+		            while (arr[left2]<x)
+		            {
+		                left2++;
+		            }
+		            left = left2;
+		            right2 = right;
+		        }
+
+		        if (kTHvalue < left2) 
+		        {
+		            while (x < arr[right2])
+		            {
+		                right2--;
+		            }
+
+		            right = right2;
+		            left2 = left;
+		        }
+
+		        if( arr[left] < arr[right] ) F_SWAP(arr[right],arr[left]);
+		    }
+
+		#undef F_SWAP
+		#undef SIGNUM
+		    return arr[kTHvalue];
+		}
+
+
+
 
 		__global__ void mf(float* in, float* out, int imgDimY, int imgDimX)
 		{
@@ -143,42 +225,21 @@ def MedianFilter(input=None, kernel_size=3, bw=16, bh=16, n=256, m=0, timing=Fal
 
 
 			// Sort to find the median
-			for (int j = 0; j < %(WS^2)s; ++j)
-			{
-				for (int k = j + 1; k < %(WS^2)s; ++k)
-				{
-					if (window[j] > window[k])
-					{
-						float tmp = window[j];
-						window[j] = window[k];
-						window[k] = tmp;
-					}
-				}
-			}
-			out[x*imgDimY + y] = window[%(WS^2)s/2];
+			//for (int j = 0; j <= %(WS^2)s/2; j++)
+			//{
+			//	for (int k = j + 1; k < %(WS^2)s; k++)
+			//	{
+			//		if (window[j] > window[k])
+			//		{
+			//			float tmp = window[j];
+			//			window[j] = window[k];
+			//			window[k] = tmp;
+			//		}
+			//	}
+			//}
+			//out[x*imgDimY + y] = window[%(WS^2)s/2];
 
-		}
-
-		__device__ void partition(float *input, int p, int r)
-		{
-			int pivot = input[r];
-
-			while (p < r)
-			{
-				while (input[p] < pivot)
-				{
-					p++;
-				}
-				while (input[r] > pivot)
-				{
-					r--;
-				}
-
-				if (input[p] == input[r])
-				{
-					p++;
-				}
-			}
+			out[x*imgDimY + y] = FloydWirth_kth(window, %(WS^2)s, %(WS^2)s/2);
 		}
 
 		"""
@@ -234,27 +295,27 @@ def MedianFilter(input=None, kernel_size=3, bw=16, bh=16, n=256, m=0, timing=Fal
 
 			if 0 <= iii < nStreams:
 				st = stream[iii]
-				s.record(stream=stream[5])
+				# s.record(stream=stream[5])
 				cuda.memcpy_dtoh_async(outdata_list[iii], out_gpu_list[iii], stream=st)
 
 			if 0 <= ii < nStreams:
 				st = stream[ii]
 				out_gpu_list[ii] = cuda.mem_alloc(imgBytes)
-				s.record(stream=stream[5])
+				# s.record(stream=stream[5])
 				mf_shared.prepare("PPii")
 				mf_shared.prepared_async_call(grid, block, st, in_gpu_list[ii], out_gpu_list[ii], expanded_M, expanded_N)
-				e.record(stream=stream[5])
-				e.synchronize()
-				print s.time_till(e), "ms for the kernel"
+				# e.record(stream=stream[5])
+				# e.synchronize()
+				#print s.time_till(e), "ms for the kernel"
 
 			if 0 <= i < nStreams:
 				st = stream[i]
-				s.record(stream=stream[5])
+				# s.record(stream=stream[5])
 				in_gpu_list[i] = cuda.mem_alloc(imgBytes)
 				cuda.memcpy_htod_async(in_gpu_list[i], in_pin_list[i], stream=st)
-				e.record(stream=stream[5])
-				e.synchronize()
-				print s.time_till(e), "ms for the transfer"
+				# e.record(stream=stream[5])
+				# e.synchronize()
+				# print s.time_till(e), "ms for the transfer"
 
 		if (padding_y > 0):
 			outdata_list = [out[padding_y:-padding_y] for out in outdata_list]
