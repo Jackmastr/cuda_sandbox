@@ -11,10 +11,10 @@ import numpy as np
 import scipy.signal as sps
 
 
-def MedianFilter(input=None, kernel_size=3, BY=16, BX=16, n=256, m=0, timing=False, nStreams=0, input_list=None):
+def MedianFilter(input=None, kernel_size=3, bw=16, bh=16, n=256, m=0, timing=False, nStreams=0, input_list=None):
 
-	BLOCK_WIDTH = BY
-	BLOCK_HEIGHT = BX
+	BLOCK_WIDTH = bw
+	BLOCK_HEIGHT = bh
 
 	WINDOW_SIZE = kernel_size
 
@@ -45,11 +45,10 @@ def MedianFilter(input=None, kernel_size=3, BY=16, BX=16, n=256, m=0, timing=Fal
 	expanded_N = N + (2 * padding_y)
 	expanded_M = M + (2 * padding_x)
 
-	gridx = max(1, int(np.ceil((expanded_N)/BLOCK_WIDTH))+1)
-	gridy = max(1, int(np.ceil((expanded_M)/BLOCK_HEIGHT))+1)
-	grid = (gridx,gridy)
+	gridx = int(np.ceil((expanded_N)/BLOCK_WIDTH))+1
+	gridy = int(np.ceil((expanded_M)/BLOCK_HEIGHT))+1
+	grid = (gridx,gridy, 1)
 	block = (BLOCK_WIDTH, BLOCK_HEIGHT, 1)
-
 
 	code = """
 		#include <stdio.h>
@@ -111,78 +110,76 @@ def MedianFilter(input=None, kernel_size=3, BY=16, BX=16, n=256, m=0, timing=Fal
 			int imgY;
 
 
-           // Load into the tile for this block
+            // Load into the tile for this block
+			if (thread_index < TSx && imgX < imgDimX)
+			{
+				for (int i = 0; i < TSy && i < imgDimY - blockIdx.y * blockDim.y; i++)
+				{
+					imgY = blockIdx.y * blockDim.y + i;
+					tile[thread_index][i] = in[imgX * imgDimY + imgY];
+				}
 
-           for (int tx = threadIdx.x; tx < TSx; tx += %(BX)s)
-            {
-                   for (int ty = threadIdx.y; ty < TSy; ty += %(BY)s)
-                    {
-                           if ((x_thread_offset + tx - threadIdx.x) < imgDimX && (y_thread_offset + ty - threadIdx.y) < imgDimY)
-                           {
-                             	tile[tx][ty] = in[(y_thread_offset + ty - threadIdx.y) + imgDimY * (x_thread_offset + tx - threadIdx.x)];
-                           }
-                    }
-
-            }
-
-
-
-
-
-			//if (thread_index < TSx && imgX < imgDimX)
-			//{
-			//	for (int i = 0; i < TSy && i < imgDimY - blockIdx.y * blockDim.y; i++)
-			//	{
-			//		imgY = blockIdx.y * blockDim.y + i;
-			//		tile[thread_index][i] = in[imgX * imgDimY + imgY];
-			//	}
-
-			//}
+			}
 
 			__syncthreads();
 
 
-			for (int x = %(WSx/2)s + x_thread_offset; x < imgDimX - %(WSx/2)s; x += %(x_stride)s)
+			int x = %(WSx/2)s + x_thread_offset;
+			int y = %(WSy/2)s + y_thread_offset;
+
+			if (x >= imgDimX - %(WSx/2)s || y >= imgDimY - %(WSy/2)s)
 			{
-				for (int y = %(WSy/2)s + y_thread_offset; y < imgDimY - %(WSy/2)s; y += %(y_stride)s)
+				return;
+			}
+
+			int i = 0;
+			for (int fx = 0; fx < %(WSy)s; ++fx)
+			{
+				for (int fy = 0; fy < %(WSx)s; ++fy)
 				{
+					window[i++] = tile[threadIdx.x + fx][threadIdx.y + fy];
+				}
+			}
 
-					int i = 0;
-					for (int fx = 0; fx < %(WSy)s; ++fx)
+
+			// Sort to find the median
+			for (int j = 0; j < %(WS^2)s; ++j)
+			{
+				for (int k = j + 1; k < %(WS^2)s; ++k)
+				{
+					if (window[j] > window[k])
 					{
-						for (int fy = 0; fy < %(WSx)s; ++fy)
-						{
-							window[i] = tile[threadIdx.x + fx][threadIdx.y + fy];
-							i += 1;
-						}
+						float tmp = window[j];
+						window[j] = window[k];
+						window[k] = tmp;
 					}
+				}
+			}
+			out[x*imgDimY + y] = window[%(WS^2)s/2];
 
+		}
 
-					// Sort to find the median
-					for (int j = 0; j < %(WS^2)s; ++j)
-					{
-						for (int k = j + 1; k < %(WS^2)s; ++k)
-						{
-							if (window[j] > window[k])
-							{
-								float tmp = window[j];
-								window[j] = window[k];
-								window[k] = tmp;
-							}
-						}
-					}
-					out[x*imgDimY + y] = window[%(WS^2)s/2];
+		__device__ void partition(float *input, int p, int r)
+		{
+			int pivot = input[r];
+
+			while (p < r)
+			{
+				while (input[p] < pivot)
+				{
+					p++;
+				}
+				while (input[r] > pivot)
+				{
+					r--;
+				}
+
+				if (input[p] == input[r])
+				{
+					p++;
 				}
 			}
 		}
-
-		//__global__ void mf_shared5x5(float *in, float *out, int imgDimY, int imgDimX)
-		//{
-		//	__shared__ float tile0[10][10];
-		//	__shared__ float tile1[10][10];
-		//	__shared__ float tile2[10][10];
-
-		//}
 
 		"""
 
@@ -212,7 +209,6 @@ def MedianFilter(input=None, kernel_size=3, BY=16, BX=16, n=256, m=0, timing=Fal
 
 
 
-
 		# Initialize the streams
 		stream = [cuda.Stream()]*nStreams
 
@@ -221,13 +217,16 @@ def MedianFilter(input=None, kernel_size=3, BY=16, BX=16, n=256, m=0, timing=Fal
 
 		# Use pinned memory for all the images
 		in_pin_list = [cuda.register_host_memory(img) for img in input_list]
+		imgBytes = in_pin_list[0].nbytes
 
 		# Initialize the outputs to empty images (assuming all images are of the same shape)
 		outdata_list = [cuda.pagelocked_empty_like(img) for img in input_list]
 
 		# Malloc on the GPU for each input and output image
-		in_gpu_list = [cuda.mem_alloc(pinnedImg.nbytes) for pinnedImg in in_pin_list]
-		out_gpu_list = [cuda.mem_alloc(pinnedImg.nbytes) for pinnedImg in in_pin_list]
+		#in_gpu_list = [cuda.mem_alloc(pinnedImg.nbytes) for pinnedImg in in_pin_list]
+		in_gpu_list = [None]*nStreams
+		#out_gpu_list = [cuda.mem_alloc(pinnedImg.nbytes) for pinnedImg in in_pin_list]
+		out_gpu_list = [None]*nStreams
 
 		for i in xrange(nStreams + 2):
 			ii = i - 1
@@ -235,17 +234,27 @@ def MedianFilter(input=None, kernel_size=3, BY=16, BX=16, n=256, m=0, timing=Fal
 
 			if 0 <= iii < nStreams:
 				st = stream[iii]
+				s.record(stream=stream[5])
 				cuda.memcpy_dtoh_async(outdata_list[iii], out_gpu_list[iii], stream=st)
 
 			if 0 <= ii < nStreams:
 				st = stream[ii]
-				mf.prepare("PPii")
-				mf.prepared_async_call(grid, block, st, in_gpu_list[ii], out_gpu_list[ii], expanded_M, expanded_N)
-				#mf(in_gpu_list[ii], outdata_list[ii], expanded_M, expanded_N, grid=grid, block=block, stream=st)
+				out_gpu_list[ii] = cuda.mem_alloc(imgBytes)
+				s.record(stream=stream[5])
+				mf_shared.prepare("PPii")
+				mf_shared.prepared_async_call(grid, block, st, in_gpu_list[ii], out_gpu_list[ii], expanded_M, expanded_N)
+				e.record(stream=stream[5])
+				e.synchronize()
+				print s.time_till(e), "ms for the kernel"
 
 			if 0 <= i < nStreams:
 				st = stream[i]
+				s.record(stream=stream[5])
+				in_gpu_list[i] = cuda.mem_alloc(imgBytes)
 				cuda.memcpy_htod_async(in_gpu_list[i], in_pin_list[i], stream=st)
+				e.record(stream=stream[5])
+				e.synchronize()
+				print s.time_till(e), "ms for the transfer"
 
 		if (padding_y > 0):
 			outdata_list = [out[padding_y:-padding_y] for out in outdata_list]

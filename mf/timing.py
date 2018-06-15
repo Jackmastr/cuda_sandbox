@@ -5,11 +5,11 @@ import scipy.signal as sps
 import mf_redux
 import pycuda.driver as cuda
 
-# s = cuda.Event()
-# e = cuda.Event()
+s = cuda.Event()
+e = cuda.Event()
 # inList = [np.random.rand(600, 1024) for i in xrange(10)]
 # inListBig = [np.random.rand(600, 1024) for i in xrange(100)]
-# inListHuge = [np.random.rand(600, 1024) for i in xrange(1000)]
+inListHuge = [np.random.rand(600, 1024) for i in xrange(500)]
 
 
 # s.record()
@@ -25,17 +25,23 @@ import pycuda.driver as cuda
 # print "THIS MEDFILT w/ 10 IMAGES: ", s.time_till(e), "ms"
 
 # s.record()
+# [sps.medfilt2d(elem, (17, 17)) for elem in inListBig]
+# e.record()
+# e.synchronize()
+# print "SCIPY MEDFILT w/ 100 IMAGES: ", s.time_till(e), "ms"
+
+# s.record()
 # mf_redux.MedianFilter(kernel_size=(17, 17), n=600, m=1024, input_list=inListBig, nStreams=100)
 # e.record()
 # e.synchronize()
 # print "THIS MEDFILT w/ 100 IMAGES: ", s.time_till(e), "ms"
 
-# s.record()
-# mf_redux.MedianFilter(kernel_size=(17, 17), n=600, m=1024, input_list=inListHuge, nStreams=1000)
-# e.record()
-# e.synchronize()
-# print "THIS MEDFILT w/ 1000 IMAGES: ", s.time_till(e), "ms"
+s.record()
+mf_redux.MedianFilter(kernel_size=(17, 17), n=600, m=1024, input_list=inListHuge, nStreams=500)
+e.record()
+e.synchronize()
+print "THIS MEDFILT w/ 1000 IMAGES: ", s.time_till(e), "ms"
 
 
-input0 = np.random.rand(600, 1024)
-mf_redux.MedianFilter(kernel_size=9, input=input0)
+# input0 = np.random.rand(600, 1024)
+# mf_redux.MedianFilter(kernel_size=11, input=input0)

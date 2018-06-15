@@ -39,6 +39,9 @@ class BasicTest(unittest.TestCase):
 		check2 = sps.medfilt2d(in2, 3)
 		check3 = sps.medfilt2d(in3, 3)
 
+		print check1[:5,:5]
+		print mf_redux.MedianFilter(kernel_size=3, n=29, input=in1)[:5,:5]
+
 		self.assertTrue(np.allclose(check0, mf_redux.MedianFilter(kernel_size=3, n=1, input=in0)))
 		self.assertTrue(np.allclose(check1, mf_redux.MedianFilter(kernel_size=3, n=29, input=in1)))
 		self.assertTrue(np.allclose(check2, mf_redux.MedianFilter(kernel_size=3, n=93, input=in2)))
