@@ -11,7 +11,7 @@ import numpy as np
 import scipy.signal as sps
 
 
-def MedianFilter(input=None, kernel_size=3, bw=16, bh=16, n=256, m=0, timing=False, nStreams=0, input_list=None):
+def MedianFilter(input=None, kernel_size=3, bw=32, bh=32, n=256, m=0, timing=False, nStreams=0, input_list=None):
 
 	BLOCK_WIDTH = bw
 	BLOCK_HEIGHT = bh
@@ -52,7 +52,7 @@ def MedianFilter(input=None, kernel_size=3, bw=16, bh=16, n=256, m=0, timing=Fal
 
 	code = """
 		#include <stdio.h>
-		#pragma comment(linker, "/HEAP:2000000")
+		#pragma comment(linker, "/HEAP:4000000")
 
 		__device__ float FloydWirth_kth(float arr[], const int length, const int kTHvalue) 
 		{
@@ -64,7 +64,6 @@ def MedianFilter(input=None, kernel_size=3, bw=16, bh=16, n=256, m=0, timing=Fal
 		    int left2 = 0;
 		    int right2 = length - 1;
 
-		    //while (left < right)
 		    while (left < right) 
 		    {           
 		        if( arr[right2] < arr[left2] ) F_SWAP(arr[left2],arr[right2]);
@@ -97,7 +96,6 @@ def MedianFilter(input=None, kernel_size=3, bw=16, bh=16, n=256, m=0, timing=Fal
 		                right2--;
 		            }while (arr[right2] > x);
 
-		            //F_SWAP(arr[left2],arr[right2]);
 		            F_SWAP(arr[left2],arr[right2]);
 		        }
 		        left2++;
@@ -158,19 +156,20 @@ def MedianFilter(input=None, kernel_size=3, bw=16, bh=16, n=256, m=0, timing=Fal
 					}
 
 					// Sort to find the median
-					for (int j = 0; j < %(WS^2)s; ++j)
-					{
-						for (int k = j + 1; k < %(WS^2)s; ++k)
-						{
-							if (window[j] > window[k])
-							{
-								float tmp = window[j];
-								window[j] = window[k];
-								window[k] = tmp;
-							}
-						}
-					}
-					out[y*imgDimY + x] = window[%(WS^2)s/2];
+					//for (int j = 0; j < %(WS^2)s; ++j)
+					//{
+					//	for (int k = j + 1; k < %(WS^2)s; ++k)
+					//	{
+					//		if (window[j] > window[k])
+					//		{
+					//			float tmp = window[j];
+					//			window[j] = window[k];
+					//			window[k] = tmp;
+					//		}
+					//	}
+					//}
+					//out[y*imgDimY + x] = window[%(WS^2)s/2];
+					out[y*imgDimY + x] = FloydWirth_kth(window, %(WS^2)s, %(WS^2)s/2);
 				}
 			}
 		}
@@ -242,6 +241,52 @@ def MedianFilter(input=None, kernel_size=3, bw=16, bh=16, n=256, m=0, timing=Fal
 			out[x*imgDimY + y] = FloydWirth_kth(window, %(WS^2)s, %(WS^2)s/2);
 		}
 
+		/* MEDIAN FILTER METHODS FROM https://github.com/aglenis/gpu_medfilter/blob/master/cuda_implementation/median_shared.cu */
+
+		__device__ void insertionSort(float window[],int size)
+		{
+    		int i , j;
+    		float temp;
+    		for(i = 0; i < size; i++) {
+        		temp = window[i];
+        		for(j = i-1; j >= 0 && temp < window[j]; j--) {
+            		window[j+1] = window[j];
+        		}
+        		window[j+1] = temp;
+    		}
+		}
+
+		__global__ void MedianFilter2D( float *input,float* output,int widthImage, int heightImage)
+		{
+    		int filter_offset=%(WS^2)s/2;
+			//y and x are oposite the cuda programming model
+    		unsigned int y = blockIdx.x * blockDim.x + threadIdx.x;
+    		unsigned int x = blockIdx.y * blockDim.y + threadIdx.y;
+    		if(y>heightImage || x>widthImage)
+        		return;
+
+    		float window[%(WS^2)s];
+   			for (int counter=0; counter<%(WS^2)s; counter++)
+    		{
+        		window[counter]=0;
+    		}
+    		int count=0;
+    		for( int k=max(y-filter_offset,0); k<=min(y+filter_offset,heightImage-1); k++)
+    		{
+        		for (int l=max(x-filter_offset,0); l<=min(x+filter_offset,widthImage-1); l++)
+        		{
+
+            		window[count++]=input[(k)*widthImage+(l)];
+
+        		}
+    		}
+    		insertionSort(window, %(WS^2)s);
+
+    		output[y*widthImage + x]=window[%(WS^2)s/2];
+
+}
+
+
 		"""
 
 	code = code % {
@@ -257,8 +302,8 @@ def MedianFilter(input=None, kernel_size=3, bw=16, bh=16, n=256, m=0, timing=Fal
 		}
 	# s.record()
 	mod = SourceModule(code)
-	mf = mod.get_function('mf')
-	mf_shared = mod.get_function('mf_shared')
+	#mf = mod.get_function('mf')
+	mf_shared = mod.get_function('mf')
 	# e.record()
 	# e.synchronize()
 	# print s.time_till(e), "ms"
