@@ -174,8 +174,11 @@ def MedianFilter(input=None, kernel_size=3, bw=32, bh=32, n=256, m=0, timing=Fal
 			}
 		}
 
+		texture<float, 1> tex;
+
 		__global__ void mf_shared(float* in, float* out, int imgDimY, int imgDimX)
-		{
+		{			
+
 			const int TSx = %(BX)s + %(WSx)s - 1;
 			const int TSy = %(BY)s + %(WSy)s - 1;
             __shared__ float tile[TSx][TSy];
@@ -198,6 +201,8 @@ def MedianFilter(input=None, kernel_size=3, bw=32, bh=32, n=256, m=0, timing=Fal
 				{
 					imgY = blockIdx.y * blockDim.y + i;
 					tile[thread_index][i] = in[imgX * imgDimY + imgY];
+					//tile[thread_index][i] = tex1D(tex, imgX * imgDimY + imgY);
+					//printf("tex2D gives: %%f, in[] gives: %%f\\n", tex1D(tex, imgX * imgDimY + imgY), in[imgX * imgDimY + imgY]);
 				}
 
 			}
@@ -300,14 +305,9 @@ def MedianFilter(input=None, kernel_size=3, bw=32, bh=32, n=256, m=0, timing=Fal
 			'WSx/2' : WS_x/2,
 			'WSy/2' : WS_y/2
 		}
-	# s.record()
 	mod = SourceModule(code)
-	#mf = mod.get_function('mf')
-	mf_shared = mod.get_function('mf')
-	# e.record()
-	# e.synchronize()
-	# print s.time_till(e), "ms"
-
+	mf_shared = mod.get_function('mf_shared')
+	texref = mod.get_texref("tex")
 
 	# NSTREAMS := NUMBER OF INPUT IMAGES
 	if (nStreams > 0):
@@ -339,12 +339,12 @@ def MedianFilter(input=None, kernel_size=3, bw=32, bh=32, n=256, m=0, timing=Fal
 			iii = i - 2
 
 			if 0 <= iii < nStreams:
-				st = stream[iii]
+				st = stream[0]
 				# s.record(stream=stream[5])
 				cuda.memcpy_dtoh_async(outdata_list[iii], out_gpu_list[iii], stream=st)
 
 			if 0 <= ii < nStreams:
-				st = stream[ii]
+				st = stream[0]
 				out_gpu_list[ii] = cuda.mem_alloc(imgBytes)
 				# s.record(stream=stream[5])
 				mf_shared.prepare("PPii")
@@ -354,10 +354,13 @@ def MedianFilter(input=None, kernel_size=3, bw=32, bh=32, n=256, m=0, timing=Fal
 				#print s.time_till(e), "ms for the kernel"
 
 			if 0 <= i < nStreams:
-				st = stream[i]
+				st = stream[0]
 				# s.record(stream=stream[5])
 				in_gpu_list[i] = cuda.mem_alloc(imgBytes)
 				cuda.memcpy_htod_async(in_gpu_list[i], in_pin_list[i], stream=st)
+
+				texref.set_array(in_gpu_list[i])
+
 				# e.record(stream=stream[5])
 				# e.synchronize()
 				# print s.time_till(e), "ms for the transfer"
