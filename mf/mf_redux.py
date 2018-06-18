@@ -2,8 +2,6 @@
 
 # Eventually get this to work over multiple GPUs, hopefully
 
-# Test without using so many format stream tricks, it may be making it slower
-
 import pycuda.driver as cuda
 import pycuda.autoinit
 from pycuda.compiler import SourceModule
@@ -11,7 +9,8 @@ import numpy as np
 import scipy.signal as sps
 
 
-def MedianFilter(input=None, kernel_size=3, bw=32, bh=32, n=256, m=0, timing=False, nStreams=0, input_list=None):
+def MedianFilter(input=None, kernel_size=3, bw=16, bh=16, input_list=None):
+
 
 	BLOCK_WIDTH = bw
 	BLOCK_HEIGHT = bh
@@ -25,21 +24,10 @@ def MedianFilter(input=None, kernel_size=3, bw=32, bh=32, n=256, m=0, timing=Fal
 	padding_y = WS_x/2
 	padding_x = WS_y/2
 
-	N = np.int32(n)
-	if m == 0:
-		M = np.int32(n)
-	else:
-		M = np.int32(m)
+	N, M = input_list[0].shape
 
-	#indata = np.array([[2, 80, 6, 3], [2, 80, 6, 3], [2, 80, 6, 3], [2, 80, 6, 3]], dtype=np.float32)
-	if input is None:
-		indata = np.array(np.random.rand(M, N), dtype=np.float32)
-	else:
-		indata = np.array(input, dtype=np.float32)
-
-	s = cuda.Event()
-	e = cuda.Event()
-	s.record()
+	# s = cuda.Event()
+	# e = cuda.Event()
 
 
 	expanded_N = N + (2 * padding_y)
@@ -52,7 +40,84 @@ def MedianFilter(input=None, kernel_size=3, bw=32, bh=32, n=256, m=0, timing=Fal
 
 	code = """
 		#include <stdio.h>
-		#pragma comment(linker, "/HEAP:4000000")
+		#pragma comment(linker, "/HEAP:1000000000")
+
+		__device__ void swap_elements(float* array,int pos1,int pos2)
+		{
+		    float temp=array[pos1];
+		    array[pos1]=array[pos2];
+		    array[pos2]=temp;
+		}
+
+		__device__ void extrema_identification(float* window,int start_offset,int size)
+		{
+
+		    //identify the minimum and maximum elements in the array
+		    unsigned int min_index,max_index;
+		    min_index=max_index=start_offset;
+		    float max_value=window[start_offset];
+		    float min_value=window[start_offset];
+		    for( int i=start_offset+1; i<start_offset+size; i++)
+		    {
+		        if(window[i]<min_value)
+		        {
+		            min_index=i;
+		            min_value=window[i];
+		        }
+		        if(window[i]>max_value)
+		        {
+		            max_index=i;
+		            max_value=window[i];
+		        }
+
+		    }
+		    swap_elements(window,min_index,start_offset);
+		    swap_elements(window,max_index,size-1+start_offset);
+		}
+
+		__device__ void forgetfulSelection(float* window,int size)
+		{
+		    int Rn=ceilf(size*size/2)+1;
+		    extrema_identification(window,0,Rn+1);
+
+		    int stop_nr=size*size-Rn-1;
+		    for (int step=0; step<(stop_nr); step++)
+		    {
+		        window[Rn]=window[Rn+step+1];
+		        extrema_identification(window,1+step,Rn-step);
+		    }
+		}
+
+		__global__ void MedianFilter2D_forgetful( float *input, float* output,int widthImage, int heightImage)
+		{
+		    int filter_offset=%(WSx)s/2;
+			//y and x are oposite the cuda programming model
+		    unsigned int y = blockIdx.x * blockDim.x + threadIdx.x;
+		    unsigned int x = blockIdx.y * blockDim.y + threadIdx.y;
+		    if(y>heightImage || x>widthImage)
+		        return;
+
+		    float window[%(WS^2)s];
+		    for (int counter=0; counter< %(WS^2)s; counter++)
+		    {
+		        window[counter]=0;
+		    }
+		    int count=0;
+		    for( int k=max(y-filter_offset,0); k<=min(y+filter_offset,heightImage-1); k++)
+		    {
+		        for (int l=max(x-filter_offset,0); l<=min(x+filter_offset,widthImage-1); l++)
+		        {
+
+		            window[count++]=input[(k)*widthImage+(l)];
+
+		        }
+		    }
+		    forgetfulSelection(window,%(WSx)s);
+
+		    output[y*widthImage + x]=window[%(WS^2)s/2];
+
+		}
+
 
 		__device__ float FloydWirth_kth(float arr[], const int length, const int kTHvalue) 
 		{
@@ -238,54 +303,13 @@ def MedianFilter(input=None, kernel_size=3, bw=32, bh=32, n=256, m=0, timing=Fal
 			//}
 			//out[x*imgDimY + y] = window[%(WS^2)s/2];
 
-			out[x*imgDimY + y] = FloydWirth_kth(window, %(WS^2)s, %(WS^2)s/2);
+			//out[x*imgDimY + y] = FloydWirth_kth(window, %(WS^2)s, %(WS^2)s/2);
+
+			forgetfulSelection(window,%(WSx)s);
+
+		    out[x*imgDimY + y]=window[%(WS^2)s/2];
+
 		}
-
-		/* MEDIAN FILTER METHODS FROM https://github.com/aglenis/gpu_medfilter/blob/master/cuda_implementation/median_shared.cu */
-
-		__device__ void insertionSort(float window[],int size)
-		{
-    		int i , j;
-    		float temp;
-    		for(i = 0; i < size; i++) {
-        		temp = window[i];
-        		for(j = i-1; j >= 0 && temp < window[j]; j--) {
-            		window[j+1] = window[j];
-        		}
-        		window[j+1] = temp;
-    		}
-		}
-
-		__global__ void MedianFilter2D( float *input,float* output,int widthImage, int heightImage)
-		{
-    		int filter_offset=%(WS^2)s/2;
-			//y and x are oposite the cuda programming model
-    		unsigned int y = blockIdx.x * blockDim.x + threadIdx.x;
-    		unsigned int x = blockIdx.y * blockDim.y + threadIdx.y;
-    		if(y>heightImage || x>widthImage)
-        		return;
-
-    		float window[%(WS^2)s];
-   			for (int counter=0; counter<%(WS^2)s; counter++)
-    		{
-        		window[counter]=0;
-    		}
-    		int count=0;
-    		for( int k=max(y-filter_offset,0); k<=min(y+filter_offset,heightImage-1); k++)
-    		{
-        		for (int l=max(x-filter_offset,0); l<=min(x+filter_offset,widthImage-1); l++)
-        		{
-
-            		window[count++]=input[(k)*widthImage+(l)];
-
-        		}
-    		}
-    		insertionSort(window, %(WS^2)s);
-
-    		output[y*widthImage + x]=window[%(WS^2)s/2];
-
-}
-
 
 		"""
 
@@ -303,129 +327,74 @@ def MedianFilter(input=None, kernel_size=3, bw=32, bh=32, n=256, m=0, timing=Fal
 	# s.record()
 	mod = SourceModule(code)
 	#mf = mod.get_function('mf')
-	mf_shared = mod.get_function('mf')
+	mf_shared = mod.get_function('mf_shared')
+	MedianFilter2D_forgetful = mod.get_function('MedianFilter2D_forgetful')
 	# e.record()
 	# e.synchronize()
 	# print s.time_till(e), "ms"
 
 
 	# NSTREAMS := NUMBER OF INPUT IMAGES
-	if (nStreams > 0):
+	nStreams = len(input_list)
+
+	# Initialize the streams
+	stream = [cuda.Stream()]*nStreams
+
+	# Pad all the images with zeros
+	input_list = [np.array( np.pad(img, ( (padding_y, padding_y), (padding_x, padding_x) ), 'constant', constant_values=0) , dtype=np.float32) for img in input_list]
+
+	# IF INSTEAD NOT PADDED
+	# input_list = [np.array( img , dtype=np.float32) for img in input_list]
+
+	# Use pinned memory for all the images
+	in_pin_list = [cuda.register_host_memory(img) for img in input_list]
+	imgBytes = in_pin_list[0].nbytes
+
+	# Initialize the outputs to empty images (assuming all images are of the same shape)
+	outdata_list = [cuda.pagelocked_empty_like(img) for img in input_list]
+
+	# Malloc on the GPU for each input and output image
+	#in_gpu_list = [cuda.mem_alloc(pinnedImg.nbytes) for pinnedImg in in_pin_list]
+	in_gpu_list = [None]*nStreams
+	#out_gpu_list = [cuda.mem_alloc(pinnedImg.nbytes) for pinnedImg in in_pin_list]
+	out_gpu_list = [None]*nStreams
+
+	for i in xrange(nStreams + 2):
+		ii = i - 1
+		iii = i - 2
+
+		if 0 <= iii < nStreams:
+			st = stream[iii]
+			# s.record(stream=stream[5])
+			cuda.memcpy_dtoh_async(outdata_list[iii], out_gpu_list[iii], stream=st)
+
+		if 0 <= ii < nStreams:
+			st = stream[ii]
+			out_gpu_list[ii] = cuda.mem_alloc(imgBytes)
+			# s.record(stream=stream[5])
+
+			mf_shared.prepare("PPii")
+			mf_shared.prepared_async_call(grid, block, st, in_gpu_list[ii], out_gpu_list[ii], expanded_M, expanded_N)
 
 
+			# MedianFilter2D_forgetful.prepare("PPii")
+			# MedianFilter2D_forgetful.prepared_async_call(grid, block, st, in_gpu_list[ii], out_gpu_list[ii], M, N)
+			# e.record(stream=stream[5])
+			# e.synchronize()
+			#print s.time_till(e), "ms for the kernel"
 
-
-		# Initialize the streams
-		stream = [cuda.Stream()]*nStreams
-
-		# Pad all the images with zeros
-		input_list = [np.array( np.pad(img, ( (padding_y, padding_y), (padding_x, padding_x) ), 'constant', constant_values=0) , dtype=np.float32) for img in input_list]
-
-		# Use pinned memory for all the images
-		in_pin_list = [cuda.register_host_memory(img) for img in input_list]
-		imgBytes = in_pin_list[0].nbytes
-
-		# Initialize the outputs to empty images (assuming all images are of the same shape)
-		outdata_list = [cuda.pagelocked_empty_like(img) for img in input_list]
-
-		# Malloc on the GPU for each input and output image
-		#in_gpu_list = [cuda.mem_alloc(pinnedImg.nbytes) for pinnedImg in in_pin_list]
-		in_gpu_list = [None]*nStreams
-		#out_gpu_list = [cuda.mem_alloc(pinnedImg.nbytes) for pinnedImg in in_pin_list]
-		out_gpu_list = [None]*nStreams
-
-		for i in xrange(nStreams + 2):
-			ii = i - 1
-			iii = i - 2
-
-			if 0 <= iii < nStreams:
-				st = stream[iii]
-				# s.record(stream=stream[5])
-				cuda.memcpy_dtoh_async(outdata_list[iii], out_gpu_list[iii], stream=st)
-
-			if 0 <= ii < nStreams:
-				st = stream[ii]
-				out_gpu_list[ii] = cuda.mem_alloc(imgBytes)
-				# s.record(stream=stream[5])
-				mf_shared.prepare("PPii")
-				mf_shared.prepared_async_call(grid, block, st, in_gpu_list[ii], out_gpu_list[ii], expanded_M, expanded_N)
-				# e.record(stream=stream[5])
-				# e.synchronize()
-				#print s.time_till(e), "ms for the kernel"
-
-			if 0 <= i < nStreams:
-				st = stream[i]
-				# s.record(stream=stream[5])
-				in_gpu_list[i] = cuda.mem_alloc(imgBytes)
-				cuda.memcpy_htod_async(in_gpu_list[i], in_pin_list[i], stream=st)
-				# e.record(stream=stream[5])
-				# e.synchronize()
-				# print s.time_till(e), "ms for the transfer"
-
-		if (padding_y > 0):
-			outdata_list = [out[padding_y:-padding_y] for out in outdata_list]
-		if (padding_x > 0):
-			outdata_list = [out[:, padding_x:-padding_x] for out in outdata_list]
-
-		return outdata_list
-
-
-
-
-
-	indata = np.pad(indata, ( (padding_y, padding_y), (padding_x, padding_x) ), 'constant', constant_values=0)
-	outdata = np.empty_like(indata)
-
-	in_pin = cuda.register_host_memory(indata)
-	out_pin = cuda.register_host_memory(outdata)
-
-	in_gpu = cuda.mem_alloc(indata.nbytes)
-	out_gpu = cuda.mem_alloc(outdata.nbytes)
-
-	# s.record()
-	cuda.memcpy_htod_async(in_gpu, in_pin)
-	# e.record()
-	# e.synchronize()
-	# print s.time_till(e), "ms"
-
-	ks = cuda.Event()
-	ke = cuda.Event()
-
-	#mf.prepare("PPii")
-	mf_shared.prepare("PPii")
-
-	# ks.record()
-	#mf.prepared_call(grid, block, in_gpu, out_gpu, expanded_M, expanded_N)
-	# ke.record()
-	# ke.synchronize()
-	# print "UNSHARED:", ks.time_till(ke), "ms"
-
-	# ks.record()
-	mf_shared.prepared_call(grid, block, in_gpu, out_gpu, expanded_M, expanded_N)
-	# ke.record()
-	# ke.synchronize()
-	# print "SHARED: ", ks.time_till(ke), "ms"
-
-
-
-
-	cuda.memcpy_dtoh(out_pin, out_gpu)
+		if 0 <= i < nStreams:
+			st = stream[i]
+			# s.record(stream=stream[5])
+			in_gpu_list[i] = cuda.mem_alloc(imgBytes)
+			cuda.memcpy_htod_async(in_gpu_list[i], in_pin_list[i], stream=st)
+			# e.record(stream=stream[5])
+			# e.synchronize()
+			# print s.time_till(e), "ms for the transfer"
 
 	if (padding_y > 0):
-		outdata = outdata[padding_y:-padding_y]
+		outdata_list = [out[padding_y:-padding_y] for out in outdata_list]
 	if (padding_x > 0):
-		outdata = outdata[:, padding_x:-padding_x]
+		outdata_list = [out[:, padding_x:-padding_x] for out in outdata_list]
 
-	if (timing):
-		e.record()
-		e.synchronize()
-		print "THIS FUNCTION: ", s.time_till(e), "ms"
-
-
-		s.record()
-		true_ans= sps.medfilt2d(indata, (WS_x, WS_y))
-		e.record()
-		e.synchronize()
-		print "SCIPY MEDFILT", s.time_till(e), "ms"
-
-	return outdata
+	return outdata_list
