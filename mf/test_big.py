@@ -12,8 +12,8 @@ class BigTest(unittest.TestCase):
 		check0 = sps.medfilt2d(in0, 5)
 		check1 = sps.medfilt2d(in1, 5)
 
-		self.assertTrue(np.allclose(check0, mf_redux.MedianFilter(kernel_size=5, input_list=[in0])))
-		self.assertTrue(np.allclose(check1, mf_redux.MedianFilter(kernel_size=5, input_list=[in1])))
+		self.assertTrue(np.allclose(check0, mf_redux.MedianFilter(kernel_size=5, n=1, input=in0)))
+		self.assertTrue(np.allclose(check1, mf_redux.MedianFilter(kernel_size=5, n=4000, input=in1)))
 	
 	def testNinebyNine(self):
 		""" Test using a 9x9 window """
@@ -23,8 +23,8 @@ class BigTest(unittest.TestCase):
 		check0 = sps.medfilt2d(in0, 9)
 		check1 = sps.medfilt2d(in1, 9)
 
-		self.assertTrue(np.allclose(check0, mf_redux.MedianFilter(kernel_size=9, input_list=[in0], bw=16, bh=16)))
-		self.assertTrue(np.allclose(check1, mf_redux.MedianFilter(kernel_size=9, input_list=[in1])))
+		self.assertTrue(np.allclose(check0, mf_redux.MedianFilter(kernel_size=9, n=1, input=in0, bw=16, bh=16)))
+		self.assertTrue(np.allclose(check1, mf_redux.MedianFilter(kernel_size=9, n=997, input=in1)))
 
 
 
