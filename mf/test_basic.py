@@ -18,14 +18,14 @@ class BasicTest(unittest.TestCase):
 
 
 
-		# to_print = check1 - mf_redux.MedianFilter(kernel_size=1, n=29, input=in1)
+		# to_print = check1 - mf_redux.MedianFilter(kernel_size=1, n=29, input_list=in1)
 		# to_print[abs(to_print) < .0001] = 0.0
 		# print to_print
 
-		self.assertTrue(np.allclose(check0, mf_redux.MedianFilter(kernel_size=1, n=1, input=in0)))
-		self.assertTrue(np.allclose(check1, mf_redux.MedianFilter(kernel_size=1, n=29, input=in1)))
-		self.assertTrue(np.allclose(check2, mf_redux.MedianFilter(kernel_size=1, n=93, input=in2)))
-		self.assertTrue(np.allclose(check3, mf_redux.MedianFilter(kernel_size=1, n=7000, input=in3)))
+		self.assertTrue(np.allclose(check0, mf_redux.MedianFilter(kernel_size=1, n=1, input_list=[in0])[0]))
+		self.assertTrue(np.allclose(check1, mf_redux.MedianFilter(kernel_size=1, n=29, input_list=[in1])[0]))
+		self.assertTrue(np.allclose(check2, mf_redux.MedianFilter(kernel_size=1, n=93, input_list=[in2])[0]))
+		self.assertTrue(np.allclose(check3, mf_redux.MedianFilter(kernel_size=1, n=7000, input_list=[in3])[0]))
 
 	def testThreeByThree(self):
 		""" Test using a 3x3 window """
@@ -39,13 +39,10 @@ class BasicTest(unittest.TestCase):
 		check2 = sps.medfilt2d(in2, 3)
 		check3 = sps.medfilt2d(in3, 3)
 
-		# print check1[:5,:5]
-		# print mf_redux.MedianFilter(kernel_size=3, n=29, input=in1)[:5,:5]
-
-		self.assertTrue(np.allclose(check0, mf_redux.MedianFilter(kernel_size=3, n=1, input=in0)))
-		self.assertTrue(np.allclose(check1, mf_redux.MedianFilter(kernel_size=3, n=29, input=in1)))
-		self.assertTrue(np.allclose(check2, mf_redux.MedianFilter(kernel_size=3, n=93, input=in2)))
-		self.assertTrue(np.allclose(check3, mf_redux.MedianFilter(kernel_size=3, n=7000, input=in3)))
+		self.assertTrue(np.allclose(check0, mf_redux.MedianFilter(kernel_size=3, n=1, input_list=[in0])[0]))
+		self.assertTrue(np.allclose(check1, mf_redux.MedianFilter(kernel_size=3, n=29, input_list=[in1])[0]))
+		self.assertTrue(np.allclose(check2, mf_redux.MedianFilter(kernel_size=3, n=93, input_list=[in2])[0]))
+		self.assertTrue(np.allclose(check3, mf_redux.MedianFilter(kernel_size=3, n=7000, input_list=[in3])[0]))
 
 if __name__ == '__main__':
 	unittest.main()
