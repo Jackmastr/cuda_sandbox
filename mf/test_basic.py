@@ -16,12 +16,6 @@ class BasicTest(unittest.TestCase):
 		check2 = sps.medfilt2d(in2, 1)
 		check3 = sps.medfilt2d(in3, 1)
 
-
-
-		# to_print = check1 - mf_redux.MedianFilter(kernel_size=1, n=29, input_list=in1)
-		# to_print[abs(to_print) < .0001] = 0.0
-		# print to_print
-
 		self.assertTrue(np.allclose(check0, mf_redux.MedianFilter(kernel_size=1, n=1, input_list=[in0])[0]))
 		self.assertTrue(np.allclose(check1, mf_redux.MedianFilter(kernel_size=1, n=29, input_list=[in1])[0]))
 		self.assertTrue(np.allclose(check2, mf_redux.MedianFilter(kernel_size=1, n=93, input_list=[in2])[0]))

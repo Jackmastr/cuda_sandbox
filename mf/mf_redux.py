@@ -53,6 +53,54 @@ def MedianFilter(input=None, kernel_size=3, bw=32, bh=32, n=256, m=0, nStreams=0
 		#include <stdio.h>
 		#pragma comment(linker, "/HEAP:4000000")
 
+
+		__device__ void swap_elements(float* array,int pos1,int pos2)
+		{
+		    float temp=array[pos1];
+		    array[pos1]=array[pos2];
+		    array[pos2]=temp;
+		}
+
+		__device__ void extrema_identification(float * window,int start_offset,int size)
+		{
+
+		    //identify the minimum and maximum elements in the array
+		    unsigned int min_index,max_index;
+		    min_index=max_index=start_offset;
+		    float max_value=window[start_offset];
+		    float min_value=window[start_offset];
+		    for( int i=start_offset+1; i<start_offset+size; i++)
+		    {
+		        if(window[i]<min_value)
+		        {
+		            min_index=i;
+		            min_value=window[i];
+		        }
+		        if(window[i]>max_value)
+		        {
+		            max_index=i;
+		            max_value=window[i];
+		        }
+
+		    }
+		    swap_elements(window,min_index,start_offset);
+		    swap_elements(window,max_index,size-1+start_offset);
+		}
+
+		__device__ void forgetfulSelection(float * window,int size)
+		{
+		    int Rn=ceilf(size*size/2)+1;
+		    extrema_identification(window,0,Rn+1);
+
+		    int stop_nr=size*size-Rn-1;
+		    for (int step=0; step<(stop_nr); step++)
+		    {
+		        window[Rn]=window[Rn+step+1];
+		        extrema_identification(window,1+step,Rn-step);
+		    }
+		}
+
+
 		__device__ float FloydWirth_kth(float arr[], const int length, const int kTHvalue) 
 		{
 		#define F_SWAP(a,b) { float temp=(a);(a)=(b);(b)=temp; }
@@ -140,7 +188,6 @@ def MedianFilter(input=None, kernel_size=3, bw=32, bh=32, n=256, m=0, nStreams=0
 
 			const int x_thread_offset = %(BY)s * blockIdx.x + threadIdx.x;
 			const int y_thread_offset = %(BX)s * blockIdx.y + threadIdx.y;
-
 			for (int y = %(WSx/2)s + y_thread_offset; y < imgDimX - %(WSx/2)s; y += %(y_stride)s)
 			{
 				for (int x = %(WSy/2)s + x_thread_offset; x < imgDimY - %(WSy/2)s; x += %(x_stride)s)
@@ -242,6 +289,9 @@ def MedianFilter(input=None, kernel_size=3, bw=32, bh=32, n=256, m=0, nStreams=0
 			//out[x*imgDimY + y] = window[%(WS^2)s/2];
 
 			out[x*imgDimY + y] = FloydWirth_kth(window, %(WS^2)s, %(WS^2)s/2);
+
+			//forgetfulSelection(window, %(WSx)s);
+			//out[x*imgDimY + y] = window[%(WS^2)s];
 		}
 
 		"""
