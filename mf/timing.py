@@ -19,7 +19,7 @@ e.synchronize()
 print "SCIPY MEDFILT w/ 10 IMAGES: ", s.time_till(e), "ms"
 
 s.record()
-mf_redux.MedianFilter(kernel_size=(17, 17), n=600, m=1024, input_list=inList)
+mf_redux.MedianFilter(kernel_size=(17, 17), input=inList)
 e.record()
 e.synchronize()
 print "THIS MEDFILT w/ 10 IMAGES: ", s.time_till(e), "ms"
@@ -31,13 +31,13 @@ print "THIS MEDFILT w/ 10 IMAGES: ", s.time_till(e), "ms"
 # print "SCIPY MEDFILT w/ 100 IMAGES: ", s.time_till(e), "ms"
 
 s.record()
-mf_redux.MedianFilter(kernel_size=(17, 17), n=600, m=1024, input_list=inListBig)
+mf_redux.MedianFilter(kernel_size=(17, 17), input=inListBig)
 e.record()
 e.synchronize()
 print "THIS MEDFILT w/ 100 IMAGES: ", s.time_till(e), "ms"
 
 #s.record()
-#mf_redux.MedianFilter(kernel_size=(17, 17), n=600, m=1024, input_list=inListHuge)
+#mf_redux.MedianFilter(kernel_size=(17, 17), input=inListHuge)
 #e.record()
 #e.synchronize()
 #print "THIS MEDFILT w/ 1000 IMAGES: ", s.time_till(e), "ms"
