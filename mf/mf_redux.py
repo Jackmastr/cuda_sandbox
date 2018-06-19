@@ -11,12 +11,13 @@ import numpy as np
 import scipy.signal as sps
 
 
-def MedianFilter(input=None, kernel_size=3, bw=32, bh=32, n=256, m=0, nStreams=0, input_list=None):
+def MedianFilter(input_list=None, kernel_size=3, bw=16, bh=16):
+
+	s = cuda.Event()
+	e = cuda.Event()
 
 	BLOCK_WIDTH = bw
 	BLOCK_HEIGHT = bh
-
-	WINDOW_SIZE = kernel_size
 
 	if isinstance(kernel_size, (int, long)):
 		kernel_size = [kernel_size]*2
@@ -25,21 +26,13 @@ def MedianFilter(input=None, kernel_size=3, bw=32, bh=32, n=256, m=0, nStreams=0
 	padding_y = WS_x/2
 	padding_x = WS_y/2
 
-	N = np.int32(n)
-	if m == 0:
-		M = np.int32(n)
-	else:
-		M = np.int32(m)
+	input_list = np.asarray(input_list)
 
-	if input is None:
-		indata = np.array(np.random.rand(M, N), dtype=np.float32)
-	else:
-		indata = np.array(input, dtype=np.float32)
-
-	s = cuda.Event()
-	e = cuda.Event()
-	s.record()
-
+	if input_list.ndim == 3:
+		_, N, M = input_list.shape
+	elif input_list.ndim == 2:
+		N, M = input_list.shape
+		input_list = [input_list]
 
 	expanded_N = N + (2 * padding_y)
 	expanded_M = M + (2 * padding_x)
@@ -50,56 +43,7 @@ def MedianFilter(input=None, kernel_size=3, bw=32, bh=32, n=256, m=0, nStreams=0
 	block = (BLOCK_WIDTH, BLOCK_HEIGHT, 1)
 
 	code = """
-		#include <stdio.h>
-		#pragma comment(linker, "/HEAP:4000000")
-
-
-		__device__ void swap_elements(float* array,int pos1,int pos2)
-		{
-		    float temp=array[pos1];
-		    array[pos1]=array[pos2];
-		    array[pos2]=temp;
-		}
-
-		__device__ void extrema_identification(float * window,int start_offset,int size)
-		{
-
-		    //identify the minimum and maximum elements in the array
-		    unsigned int min_index,max_index;
-		    min_index=max_index=start_offset;
-		    float max_value=window[start_offset];
-		    float min_value=window[start_offset];
-		    for( int i=start_offset+1; i<start_offset+size; i++)
-		    {
-		        if(window[i]<min_value)
-		        {
-		            min_index=i;
-		            min_value=window[i];
-		        }
-		        if(window[i]>max_value)
-		        {
-		            max_index=i;
-		            max_value=window[i];
-		        }
-
-		    }
-		    swap_elements(window,min_index,start_offset);
-		    swap_elements(window,max_index,size-1+start_offset);
-		}
-
-		__device__ void forgetfulSelection(float * window,int size)
-		{
-		    int Rn=ceilf(size*size/2)+1;
-		    extrema_identification(window,0,Rn+1);
-
-		    int stop_nr=size*size-Rn-1;
-		    for (int step=0; step<(stop_nr); step++)
-		    {
-		        window[Rn]=window[Rn+step+1];
-		        extrema_identification(window,1+step,Rn-step);
-		    }
-		}
-
+		#pragma comment(linker, "/HEAP:2000000")
 
 		__device__ float FloydWirth_kth(float arr[], const int length, const int kTHvalue) 
 		{
@@ -291,7 +235,9 @@ def MedianFilter(input=None, kernel_size=3, bw=32, bh=32, n=256, m=0, nStreams=0
 			out[x*imgDimY + y] = FloydWirth_kth(window, %(WS^2)s, %(WS^2)s/2);
 
 			//forgetfulSelection(window, %(WSx)s);
-			//out[x*imgDimY + y] = window[%(WS^2)s];
+			//out[x*imgDimY + y] = window[%(WS^2)s/2];
+
+			//out[x*imgDimY + y] = myForgetfulSelection(window);
 		}
 
 		"""
@@ -354,13 +300,9 @@ def MedianFilter(input=None, kernel_size=3, bw=32, bh=32, n=256, m=0, nStreams=0
 
 		if 0 <= i < nStreams:
 			st = stream[i]
-			# s.record(stream=stream[5])
 			cuda.matrix_to_texref(in_pin_list[i], texref, order="C")
 			in_gpu_list[i] = cuda.mem_alloc(imgBytes)
 			#cuda.memcpy_htod_async(in_gpu_list[i], in_pin_list[i], stream=st)
-			# e.record(stream=stream[5])
-			# e.synchronize()
-			# print s.time_till(e), "ms for the transfer"
 
 	if (padding_y > 0):
 		outdata_list = [out[padding_y:-padding_y] for out in outdata_list]
@@ -368,54 +310,3 @@ def MedianFilter(input=None, kernel_size=3, bw=32, bh=32, n=256, m=0, nStreams=0
 		outdata_list = [out[:, padding_x:-padding_x] for out in outdata_list]
 
 	return outdata_list
-
-
-
-
-
-	# indata = np.pad(indata, ( (padding_y, padding_y), (padding_x, padding_x) ), 'constant', constant_values=0)
-	# outdata = np.empty_like(indata)
-
-	# in_pin = cuda.register_host_memory(indata)
-	# out_pin = cuda.register_host_memory(outdata)
-
-	# in_gpu = cuda.mem_alloc(indata.nbytes)
-	# out_gpu = cuda.mem_alloc(outdata.nbytes)
-
-	# # s.record()
-
-	# cuda.matrix_to_texref(in_pin, texref, order="C")
-	# cuda.memcpy_htod(in_gpu, in_pin)
-	# # e.record()
-	# # e.synchronize()
-	# # print s.time_till(e), "ms"
-
-	# ks = cuda.Event()
-	# ke = cuda.Event()
-
-	# #mf.prepare("PPii")
-	# mf_shared.prepare("Pii")
-
-	# # ks.record()
-	# #mf.prepared_call(grid, block, in_gpu, out_gpu, expanded_M, expanded_N)
-	# # ke.record()
-	# # ke.synchronize()
-	# # print "UNSHARED:", ks.time_till(ke), "ms"
-
-	# # ks.record()
-	# mf_shared.prepared_call(grid, block, out_gpu, expanded_M, expanded_N)
-	# # ke.record()
-	# # ke.synchronize()
-	# # print "SHARED: ", ks.time_till(ke), "ms"
-
-
-
-
-	# cuda.memcpy_dtoh(out_pin, out_gpu)
-
-	# if (padding_y > 0):
-	# 	outdata = outdata[padding_y:-padding_y]
-	# if (padding_x > 0):
-	# 	outdata = outdata[:, padding_x:-padding_x]
-
-	# return outdata
