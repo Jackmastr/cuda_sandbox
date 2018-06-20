@@ -11,7 +11,7 @@ import numpy as np
 import scipy.signal as sps
 
 
-def MedianFilter(input=None, kernel_size=3, bw=16, bh=16):
+def MedianFilter(input=None, kernel_size=3, bw=32, bh=32):
 
 	s = cuda.Event()
 	e = cuda.Event()
@@ -47,15 +47,52 @@ def MedianFilter(input=None, kernel_size=3, bw=16, bh=16):
 	code = """
 		#pragma comment(linker, "/HEAP:2000000")
 
-		__device__ float FloydWirth_kth(float arr[], const int length, const int kTHvalue) 
+		__device__ int partition(float* input, int p, int r)
+		{
+		    float pivot = input[r];
+		    
+		    while ( p < r )
+		    {
+		        while ( input[p] < pivot )
+		            p++;
+		        
+		        while ( input[r] > pivot )
+		            r--;
+		        
+		        if ( input[p] == input[r] )
+		            p++;
+		        else if ( p < r ) {
+		            float tmp = input[p];
+		            input[p] = input[r];
+		            input[r] = tmp;
+		        }
+		    }
+		    
+		    return r;
+		}
+
+		__device__ float quick_select(float* input, int p, int r, int k)
+		{
+		    if ( p == r ) return input[p];
+		    int j = partition(input, p, r);
+		    int length = j - p + 1;
+		    if ( length == k ) return input[j];
+		    else if ( k < length ) return quick_select(input, p, j - 1, k);
+		    else  return quick_select(input, j + 1, r, k - length);
+		}
+
+
+
+
+		__device__ float FloydWirth_kth(float arr[], const int kTHvalue) 
 		{
 		#define F_SWAP(a,b) { float temp=(a);(a)=(b);(b)=temp; }
 		#define SIGNUM(x) ((x) < 0 ? -1 : ((x) > 0 ? 1 : (x)))
 
 		    int left = 0;       
-		    int right = length - 1;     
+		    int right = %(WS^2)s - 1;     
 		    int left2 = 0;
-		    int right2 = length - 1;
+		    int right2 = %(WS^2)s - 1;
 
 		    while (left < right) 
 		    {           
@@ -132,8 +169,8 @@ def MedianFilter(input=None, kernel_size=3, bw=16, bh=16):
 
 			float window[%(WS^2)s];
 
-			const int x_thread_offset = %(BY)s * blockIdx.x + threadIdx.x;
-			const int y_thread_offset = %(BX)s * blockIdx.y + threadIdx.y;
+			int x_thread_offset = %(BY)s * blockIdx.x + threadIdx.x;
+			int y_thread_offset = %(BX)s * blockIdx.y + threadIdx.y;
 			for (int y = %(WSx/2)s + y_thread_offset; y < imgDimX - %(WSx/2)s; y += %(y_stride)s)
 			{
 				for (int x = %(WSy/2)s + x_thread_offset; x < imgDimY - %(WSy/2)s; x += %(x_stride)s)
@@ -143,27 +180,27 @@ def MedianFilter(input=None, kernel_size=3, bw=16, bh=16):
 					{
 						for (int fy = 0; fy < %(WSx)s; ++fy)
 						{
-							window[i] = tex2D(tex, (float) (x + fx - %(WSy/2)s), (float) (y + fy - %(WSx/2)s));
-							//window[i] = in[(x + fx - %(WSy/2)s) + (y + fy - %(WSx/2)s)*imgDimY];
+							//window[i] = tex2D(tex, (float) (x + fx - %(WSy/2)s), (float) (y + fy - %(WSx/2)s));
+							window[i] = in[(x + fx - %(WSy/2)s) + (y + fy - %(WSx/2)s)*imgDimY];
 							i += 1;
 						}
 					}
 
 					// Sort to find the median
-					//for (int j = 0; j < %(WS^2)s; ++j)
-					//{
-					//	for (int k = j + 1; k < %(WS^2)s; ++k)
-					//	{
-					//		if (window[j] > window[k])
-					//		{
-					//			float tmp = window[j];
-					//			window[j] = window[k];
-					//			window[k] = tmp;
-					//		}
-					//	}
-					//}
-					//out[y*imgDimY + x] = window[%(WS^2)s/2];
-					out[y*imgDimY + x] = FloydWirth_kth(window, %(WS^2)s, %(WS^2)s/2);
+					for (int j = 0; j < %(WS^2)s/2 + 1; j++)
+					{
+						for (int k = j + 1; k < %(WS^2)s; k++)
+						{
+							if (window[j] > window[k])
+							{
+								float tmp = window[j];
+								window[j] = window[k];
+								window[k] = tmp;
+							}
+						}
+					}
+					out[y*imgDimY + x] = window[%(WS^2)s/2];
+					//out[y*imgDimY + x] = FloydWirth_kth(window, %(WS^2)s/2);
 				}
 			}
 		}
@@ -210,9 +247,9 @@ def MedianFilter(input=None, kernel_size=3, bw=16, bh=16):
 			}
 
 			int i = 0;
-			for (int fx = 0; fx < %(WSy)s; ++fx)
+			for (int fx = 0; fx < %(WSx)s; ++fx)
 			{
-				for (int fy = 0; fy < %(WSx)s; ++fy)
+				for (int fy = 0; fy < %(WSy)s; ++fy)
 				{
 					window[i++] = tile[threadIdx.x + fx][threadIdx.y + fy];
 				}
@@ -234,7 +271,7 @@ def MedianFilter(input=None, kernel_size=3, bw=16, bh=16):
 			//}
 			//out[x*imgDimY + y] = window[%(WS^2)s/2];
 
-			out[x*imgDimY + y] = FloydWirth_kth(window, %(WS^2)s, %(WS^2)s/2);
+			out[x*imgDimY + y] = FloydWirth_kth(window, %(WS^2)s/2);
 
 			//forgetfulSelection(window, %(WSx)s);
 			//out[x*imgDimY + y] = window[%(WS^2)s/2];
@@ -257,6 +294,7 @@ def MedianFilter(input=None, kernel_size=3, bw=16, bh=16):
 		}
 	mod = SourceModule(code)
 	mf_shared = mod.get_function('mf_shared')
+	mf = mod.get_function('mf')
 	texref = mod.get_texref("tex")
 
 
@@ -294,8 +332,12 @@ def MedianFilter(input=None, kernel_size=3, bw=16, bh=16):
 			st = stream[ii]
 			out_gpu_list[ii] = cuda.mem_alloc(imgBytes)
 			# s.record(stream=stream[0])
-			mf_shared.prepare("Pii")
-			mf_shared.prepared_async_call(grid, block, st, out_gpu_list[ii], expanded_M, expanded_N)
+			# mf_shared.prepare("Pii")
+			# mf_shared.prepared_async_call(grid, block, st, out_gpu_list[ii], expanded_M, expanded_N)
+
+			mf.prepare("PPii")
+			mf.prepared_async_call(grid, block, st, in_gpu_list[ii], out_gpu_list[ii], expanded_M, expanded_N)
+
 			# e.record(stream=stream[0])
 			# e.synchronize()
 			# print s.time_till(e), "ms for the kernel"
@@ -304,7 +346,7 @@ def MedianFilter(input=None, kernel_size=3, bw=16, bh=16):
 			st = stream[i]
 			cuda.matrix_to_texref(in_pin_list[i], texref, order="C")
 			in_gpu_list[i] = cuda.mem_alloc(imgBytes)
-			#cuda.memcpy_htod_async(in_gpu_list[i], in_pin_list[i], stream=st)
+			cuda.memcpy_htod_async(in_gpu_list[i], in_pin_list[i], stream=st)
 
 	if (padding_y > 0):
 		outdata_list = [out[padding_y:-padding_y] for out in outdata_list]

@@ -1,0 +1,58 @@
+** Rough Draft of Median Filter Memo **
+
+Benchmark Speed Tests:
+
+** (17, 17) **
+SCIPY MEDFILT w/ 10 IMAGES:  23502.5917969 ms
+SCIPY MEDFILT w/ 10 IMAGES:  23576.3867188 ms
+SCIPY MEDFILT w/ 10 IMAGES:  24172.9804688 ms
+SCIPY MEDFILT w/ 10 IMAGES:  23442.9550781 ms
+
+FLOYD-WIRTH MEDFILT w/ 100 IMAGES:  19710.8925781 ms
+FLOYD-WIRTH MEDFILT w/ 100 IMAGES:  19750.859375 ms
+FLOYD-WIRTH MEDFILT w/ 100 IMAGES:  19999.5957031 ms
+FLOYD-WIRTH MEDFILT w/ 100 IMAGES:  19697.3339844 ms
+
+PARTIAL INSERTION SORT MEDFILT w/ 100 IMAGES:  51824.328125 ms
+PARTIAL INSERTION SORT MEDFILT w/ 100 IMAGES:  50571.7578125 ms
+PARTIAL INSERTION SORT MEDFILT w/ 100 IMAGES:  50722.53125 ms
+PARTIAL INSERTION SORT MEDFILT w/ 100 IMAGES:  50566.75 ms
+
+** (11, 11) **
+SCIPY MEDFILT w/ 10 IMAGES:  10471.53125 ms
+SCIPY MEDFILT w/ 10 IMAGES:  10488.9589844 ms
+SCIPY MEDFILT w/ 10 IMAGES:  10331.2705078 ms
+SCIPY MEDFILT w/ 10 IMAGES:  10337.0429688 ms
+
+FLOYD-WIRTH MEDFILT w/ 100 IMAGES:  8797.54980469 ms
+FLOYD-WIRTH MEDFILT w/ 100 IMAGES:  7632.80224609 ms
+FLOYD-WIRTH MEDFILT w/ 100 IMAGES:  7565.90771484 ms
+FLOYD-WIRTH MEDFILT w/ 100 IMAGES:  7671.72314453 ms
+
+
+
+Pitfalls & Things I Learned:
+
+- Very large input sizes use: #pragma comment(linker, "/HEAP:2000000")
+
+- texture memory (doesn't really speed us up in this case)
+
+- shared memory (not really good in this case, talk about overlap, yada yada)
+
+- pad with zeros VS doing bounds checking with if()
+
+- Insertion Sort, Partial Insertion Sort, QuickSelect, Floyd-Writh Select (with citation)
+
+- Maybe I should just use an Jupyter Notebook (if only for the writeup so I can reference sections of the code)
+
+- Be VERY(!) careful in keeping dimensions consistent (x, y, height, width, etc.) It is a terrible pain to go back after the fact and fix/debug
+
+- Talk about my experience using CUDA-GDB --> b <func name>, cuda thread <thread index>, p to print, disp to display throughout, Need to comment out print statements to run it
+
+- Block size of 32x32 has spontaneous problems sometimes (with the 9x9 kernel for whatever reason)
+
+- Using format strings (escaping with another % or /)
+
+- Talk about testing (problems)
+
+- Talk about timing (problems) - Caching for the compilations
