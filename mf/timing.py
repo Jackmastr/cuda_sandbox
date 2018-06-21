@@ -39,10 +39,10 @@ print "done making it"
 
 
 s.record()
-mf_redux.MedianFilter(kernel_size=(11, 11), input=inListBig)
+mf_redux.MedianFilter(kernel_size=(17, 17), input=inListBig)
 e.record()
 e.synchronize()
-print "PARTIAL INSERTION SORT MEDFILT w/ 100 IMAGES: ", s.time_till(e), "ms"
+print "~ MEDFILT w/ 100 IMAGES: ", s.time_till(e), "ms"
 
 
 # # s.record()

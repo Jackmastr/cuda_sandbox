@@ -187,20 +187,20 @@ def MedianFilter(input=None, kernel_size=3, bw=32, bh=32):
 					}
 
 					// Sort to find the median
-					for (int j = 0; j < %(WS^2)s/2 + 1; j++)
-					{
-						for (int k = j + 1; k < %(WS^2)s; k++)
-						{
-							if (window[j] > window[k])
-							{
-								float tmp = window[j];
-								window[j] = window[k];
-								window[k] = tmp;
-							}
-						}
-					}
-					out[y*imgDimY + x] = window[%(WS^2)s/2];
-					//out[y*imgDimY + x] = FloydWirth_kth(window, %(WS^2)s/2);
+					//for (int j = 0; j < %(WS^2)s/2 + 1; j++)
+					//{
+					//	for (int k = j + 1; k < %(WS^2)s; k++)
+					//	{
+					//		if (window[j] > window[k])
+					//		{
+					//			float tmp = window[j];
+					//			window[j] = window[k];
+					//			window[k] = tmp;
+					//		}
+					//	}
+					//}
+					//out[y*imgDimY + x] = window[%(WS^2)s/2];
+					out[y*imgDimY + x] = FloydWirth_kth(window, %(WS^2)s/2);
 				}
 			}
 		}
@@ -293,7 +293,7 @@ def MedianFilter(input=None, kernel_size=3, bw=32, bh=32):
 			'WSy/2' : WS_y/2
 		}
 	mod = SourceModule(code)
-	mf_shared = mod.get_function('mf_shared')
+	#mf_shared = mod.get_function('mf_shared')
 	mf = mod.get_function('mf')
 	texref = mod.get_texref("tex")
 
@@ -344,7 +344,7 @@ def MedianFilter(input=None, kernel_size=3, bw=32, bh=32):
 
 		if 0 <= i < nStreams:
 			st = stream[i]
-			cuda.matrix_to_texref(in_pin_list[i], texref, order="C")
+			#cuda.matrix_to_texref(in_pin_list[i], texref, order="C")
 			in_gpu_list[i] = cuda.mem_alloc(imgBytes)
 			cuda.memcpy_htod_async(in_gpu_list[i], in_pin_list[i], stream=st)
 

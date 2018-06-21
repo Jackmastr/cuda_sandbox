@@ -13,10 +13,10 @@ FLOYD-WIRTH MEDFILT w/ 100 IMAGES:  19750.859375 ms
 FLOYD-WIRTH MEDFILT w/ 100 IMAGES:  19999.5957031 ms
 FLOYD-WIRTH MEDFILT w/ 100 IMAGES:  19697.3339844 ms
 
-PARTIAL INSERTION SORT MEDFILT w/ 100 IMAGES:  51824.328125 ms
-PARTIAL INSERTION SORT MEDFILT w/ 100 IMAGES:  50571.7578125 ms
-PARTIAL INSERTION SORT MEDFILT w/ 100 IMAGES:  50722.53125 ms
-PARTIAL INSERTION SORT MEDFILT w/ 100 IMAGES:  50566.75 ms
+PARTIAL SELECTION SORT MEDFILT w/ 100 IMAGES:  51824.328125 ms
+PARTIAL SELECTION SORT MEDFILT w/ 100 IMAGES:  50571.7578125 ms
+PARTIAL SELECTION SORT MEDFILT w/ 100 IMAGES:  50722.53125 ms
+PARTIAL SELECTION SORT MEDFILT w/ 100 IMAGES:  50566.75 ms
 
 ** (11, 11) **
 SCIPY MEDFILT w/ 10 IMAGES:  10471.53125 ms
@@ -41,7 +41,7 @@ Pitfalls & Things I Learned:
 
 - pad with zeros VS doing bounds checking with if()
 
-- Insertion Sort, Partial Insertion Sort, QuickSelect, Floyd-Writh Select (with citation)
+- SELECTION Sort, Partial SELECTION Sort, QuickSelect, Floyd-Writh Select (with citation)
 
 - Maybe I should just use an Jupyter Notebook (if only for the writeup so I can reference sections of the code)
 
