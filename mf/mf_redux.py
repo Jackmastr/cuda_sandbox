@@ -11,7 +11,7 @@ import numpy as np
 import scipy.signal as sps
 
 
-def MedianFilter(input=None, kernel_size=3, bw=32, bh=32):
+def MedianFilter(input=None, kernel_size=3, bw=16, bh=16):
 
 	s = cuda.Event()
 	e = cuda.Event()
@@ -45,42 +45,55 @@ def MedianFilter(input=None, kernel_size=3, bw=32, bh=32):
 	block = (BLOCK_WIDTH, BLOCK_HEIGHT, 1)
 
 	code = """
-		#pragma comment(linker, "/HEAP:2000000")
+		#pragma comment(linker, "/HEAP:4000000")
 
-		__device__ int partition(float* input, int p, int r)
-		{
-		    float pivot = input[r];
-		    
-		    while ( p < r )
-		    {
-		        while ( input[p] < pivot )
-		            p++;
-		        
-		        while ( input[r] > pivot )
-		            r--;
-		        
-		        if ( input[p] == input[r] )
-		            p++;
-		        else if ( p < r ) {
-		            float tmp = input[p];
-		            input[p] = input[r];
-		            input[r] = tmp;
-		        }
+
+		/* Some sample C code for the quickselect algorithm, 
+		   taken from Numerical Recipes in C. */
+
+		#define SWAP(a,b) temp=(a);(a)=(b);(b)=temp;
+
+		__device__ float quickselect(float *arr, int n, int k) {
+		  unsigned long i,ir,j,l,mid;
+		  float a,temp;
+
+		  l=0;
+		  ir=n-1;
+		  for(;;) {
+		    if (ir <= l+1) { 
+		      if (ir == l+1 && arr[ir] < arr[l]) {
+			SWAP(arr[l],arr[ir]);
+		      }
+		      return arr[k];
 		    }
-		    
-		    return r;
+		    else {
+		      mid=(l+ir) >> 1; 
+		      SWAP(arr[mid],arr[l+1]);
+		      if (arr[l] > arr[ir]) {
+			SWAP(arr[l],arr[ir]);
+		      }
+		      if (arr[l+1] > arr[ir]) {
+			SWAP(arr[l+1],arr[ir]);
+		      }
+		      if (arr[l] > arr[l+1]) {
+			SWAP(arr[l],arr[l+1]);
+		      }
+		      i=l+1; 
+		      j=ir;
+		      a=arr[l+1]; 
+		      for (;;) { 
+			do i++; while (arr[i] < a); 
+			do j--; while (arr[j] > a); 
+			if (j < i) break; 
+			SWAP(arr[i],arr[j]);
+		      } 
+		      arr[l+1]=arr[j]; 
+		      arr[j]=a;
+		      if (j >= k) ir=j-1; 
+		      if (j <= k) l=i;
+		    }
+		  }
 		}
-
-		__device__ float quick_select(float* input, int p, int r, int k)
-		{
-		    if ( p == r ) return input[p];
-		    int j = partition(input, p, r);
-		    int length = j - p + 1;
-		    if ( length == k ) return input[j];
-		    else if ( k < length ) return quick_select(input, p, j - 1, k);
-		    else  return quick_select(input, j + 1, r, k - length);
-		}
-
 
 
 
@@ -201,6 +214,7 @@ def MedianFilter(input=None, kernel_size=3, bw=32, bh=32):
 					//}
 					//out[y*imgDimY + x] = window[%(WS^2)s/2];
 					out[y*imgDimY + x] = FloydWirth_kth(window, %(WS^2)s/2);
+					out[y*imgDimY + x] = quickselect(window, %(WS^2)s, %(WS^2)s/2);
 				}
 			}
 		}
@@ -290,7 +304,7 @@ def MedianFilter(input=None, kernel_size=3, bw=32, bh=32):
 			'WSx' : WS_x,
 			'WSy' : WS_y,
 			'WSx/2' : WS_x/2,
-			'WSy/2' : WS_y/2
+			'WSy/2' : WS_y/2,
 		}
 	mod = SourceModule(code)
 	#mf_shared = mod.get_function('mf_shared')
