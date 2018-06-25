@@ -1,7 +1,7 @@
 import unittest
 import numpy as np 
 import scipy.signal as sps
-import mf_redux
+import mf
 
 class BigTest(unittest.TestCase):
 	def testFivebyFive(self):
@@ -12,8 +12,8 @@ class BigTest(unittest.TestCase):
 		check0 = sps.medfilt2d(in0, 5)
 		check1 = sps.medfilt2d(in1, 5)
 
-		self.assertTrue(np.allclose(check0, mf_redux.MedianFilter(kernel_size=5, input=[in0])[0]))
-		self.assertTrue(np.allclose(check1, mf_redux.MedianFilter(kernel_size=5, input=[in1])[0]))
+		self.assertTrue(np.allclose(check0, mf.MedianFilter(kernel_size=5, input=[in0])[0]))
+		self.assertTrue(np.allclose(check1, mf.MedianFilter(kernel_size=5, input=[in1])[0]))
 	
 	def testNinebyNine(self):
 		""" Test using a 9x9 window """
@@ -23,8 +23,8 @@ class BigTest(unittest.TestCase):
 		check0 = sps.medfilt2d(in0, 9)
 		check1 = sps.medfilt2d(in1, 9)
 
-		self.assertTrue(np.allclose(check0, mf_redux.MedianFilter(kernel_size=9, input=[in0], bw=16, bh=16)[0]))
-		self.assertTrue(np.allclose(check1, mf_redux.MedianFilter(kernel_size=9, input=[in1])[0]))
+		self.assertTrue(np.allclose(check0, mf.MedianFilter(kernel_size=9, input=[in0], bw=16, bh=16)[0]))
+		self.assertTrue(np.allclose(check1, mf.MedianFilter(kernel_size=9, input=[in1])[0]))
 
 
 

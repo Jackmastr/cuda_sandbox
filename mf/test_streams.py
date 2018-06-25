@@ -1,7 +1,7 @@
 import unittest
 import numpy as np 
 import scipy.signal as sps
-import mf_redux
+import mf
 
 class StreamTest(unittest.TestCase):
 	def testStreams(self):
@@ -18,16 +18,16 @@ class StreamTest(unittest.TestCase):
 		check2 = sps.medfilt2d(in2, 3)
 		check3 = sps.medfilt2d(in3, 5)
 
-		self.assertTrue(np.allclose(check99, mf_redux.MedianFilter(kernel_size=1, input=[in99]*3)[0]))
+		self.assertTrue(np.allclose(check99, mf.MedianFilter(kernel_size=1, input=[in99]*3)[0]))
 
 
-		self.assertTrue(np.allclose(check0, mf_redux.MedianFilter(kernel_size=3, input=[in0, in1, in0])[0]))
-		self.assertTrue(np.allclose(check1, mf_redux.MedianFilter(kernel_size=3, input=[in0, in1, in1])[1]))
+		self.assertTrue(np.allclose(check0, mf.MedianFilter(kernel_size=3, input=[in0, in1, in0])[0]))
+		self.assertTrue(np.allclose(check1, mf.MedianFilter(kernel_size=3, input=[in0, in1, in1])[1]))
 
-		self.assertTrue(np.allclose(check1, mf_redux.MedianFilter(kernel_size=3, input=[in99, in0, in1, in2])[2]))
-		self.assertTrue(np.allclose(check2, mf_redux.MedianFilter(kernel_size=3, input=[in99, in0, in1, in2])[3]))
+		self.assertTrue(np.allclose(check1, mf.MedianFilter(kernel_size=3, input=[in99, in0, in1, in2])[2]))
+		self.assertTrue(np.allclose(check2, mf.MedianFilter(kernel_size=3, input=[in99, in0, in1, in2])[3]))
 
-		self.assertTrue(np.allclose(check3, mf_redux.MedianFilter(kernel_size=5, input=[in3]*5)[1]))
+		self.assertTrue(np.allclose(check3, mf.MedianFilter(kernel_size=5, input=[in3]*5)[1]))
 
 	def testStreamsMore(self):
 		""" A more comprehensive test of streams """
@@ -35,7 +35,7 @@ class StreamTest(unittest.TestCase):
 
 		check0 = [sps.medfilt2d(elem, (5, 7)) for elem in inList0]
 
-		ans0 = mf_redux.MedianFilter(kernel_size=(5,7), input=inList0)
+		ans0 = mf.MedianFilter(kernel_size=(5,7), input=inList0)
 
 		for i in xrange(10):
 			self.assertTrue(np.allclose(check0[i], ans0[i]))
@@ -46,7 +46,7 @@ class StreamTest(unittest.TestCase):
 
 		check1 = [sps.medfilt2d(elem, (7, 9)) for elem in inList1]
 
-		ans1 = mf_redux.MedianFilter(kernel_size=(7, 9), input=inList1)
+		ans1 = mf.MedianFilter(kernel_size=(7, 9), input=inList1)
 
 		for i in xrange(10):
 			self.assertTrue(np.allclose(check1[i], ans1[i]))

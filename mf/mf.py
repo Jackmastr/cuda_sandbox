@@ -11,7 +11,7 @@ import numpy as np
 import scipy.signal as sps
 
 
-def MedianFilter(input=None, kernel_size=3, bw=16, bh=16):
+def MedianFilter(input=None, kernel_size=3, bw=32, bh=32):
 
 	s = cuda.Event()
 	e = cuda.Event()
@@ -214,7 +214,7 @@ def MedianFilter(input=None, kernel_size=3, bw=16, bh=16):
 					//}
 					//out[y*imgDimY + x] = window[%(WS^2)s/2];
 					out[y*imgDimY + x] = FloydWirth_kth(window, %(WS^2)s/2);
-					out[y*imgDimY + x] = quickselect(window, %(WS^2)s, %(WS^2)s/2);
+					//out[y*imgDimY + x] = quickselect(window, %(WS^2)s, %(WS^2)s/2);
 				}
 			}
 		}

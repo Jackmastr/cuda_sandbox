@@ -2,7 +2,7 @@
 
 import numpy as np 
 import scipy.signal as sps
-import mf_redux
+import mf
 import pycuda.driver as cuda
 
 s = cuda.Event()
@@ -39,10 +39,10 @@ print "done making it"
 
 
 s.record()
-mf_redux.MedianFilter(kernel_size=(17, 17), input=inListBig)
+mf.MedianFilter(kernel_size=(11, 11), input=inListBig)
 e.record()
 e.synchronize()
-print "~ MEDFILT w/ 100 IMAGES: ", s.time_till(e), "ms"
+print "QUICKSELECT MEDFILT w/ 100 IMAGES: ", s.time_till(e), "ms"
 
 
 # # s.record()
@@ -52,13 +52,13 @@ print "~ MEDFILT w/ 100 IMAGES: ", s.time_till(e), "ms"
 # # print "SCIPY MEDFILT w/ 100 IMAGES: ", s.time_till(e), "ms"
 
 # s.record()
-# mf_redux.MedianFilter(kernel_size=(17, 17), input=inListBig)
+# mf.MedianFilter(kernel_size=(17, 17), input=inListBig)
 # e.record()
 # e.synchronize()
 # print "THIS MEDFILT w/ 100 IMAGES: ", s.time_till(e), "ms"
 
 # #s.record()
-# #mf_redux.MedianFilter(kernel_size=(17, 17), input=inListHuge)
+# #mf.MedianFilter(kernel_size=(17, 17), input=inListHuge)
 # #e.record()
 # #e.synchronize()
 # #print "THIS MEDFILT w/ 1000 IMAGES: ", s.time_till(e), "ms"
