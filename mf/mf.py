@@ -43,7 +43,7 @@ def MedianFilter(input=None, kernel_size=3, bw=40, bh=24):
 	block = (BLOCK_WIDTH, BLOCK_HEIGHT, 1)
 
 	code = """
-		#pragma comment(linker, "/HEAP:200000")
+		#pragma comment(linker, "/HEAP:4000000")
 
 
 		/* Some sample C code for the quickselect algorithm, 
