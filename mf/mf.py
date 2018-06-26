@@ -2,8 +2,6 @@
 
 # Eventually get this to work over multiple GPUs, hopefully
 
-# Test without using so many format stream tricks, it may be making it slower
-
 import pycuda.driver as cuda
 import pycuda.autoinit
 from pycuda.compiler import SourceModule
@@ -11,7 +9,7 @@ import numpy as np
 import scipy.signal as sps
 
 
-def MedianFilter(input=None, kernel_size=3, bw=32, bh=32):
+def MedianFilter(input=None, kernel_size=3, bw=40, bh=24):
 
 	s = cuda.Event()
 	e = cuda.Event()
@@ -45,7 +43,7 @@ def MedianFilter(input=None, kernel_size=3, bw=32, bh=32):
 	block = (BLOCK_WIDTH, BLOCK_HEIGHT, 1)
 
 	code = """
-		#pragma comment(linker, "/HEAP:4000000")
+		#pragma comment(linker, "/HEAP:200000")
 
 
 		/* Some sample C code for the quickselect algorithm, 
@@ -95,7 +93,9 @@ def MedianFilter(input=None, kernel_size=3, bw=32, bh=32):
 		  }
 		}
 
-
+		/* https://softwareengineering.stackexchange.com/questions/284767/kth-selection-routine-floyd-algorithm-489
+		 * Implementation from Stack Exchange user: Andy Dansby 
+		 */
 
 		__device__ float FloydWirth_kth(float arr[], const int kTHvalue) 
 		{
