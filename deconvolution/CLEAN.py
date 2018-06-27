@@ -151,14 +151,14 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 	x = quickmod.get_function("x")
 	e.record()
 	e.synchronize()
-	print "fastest possible compilation time:", s.time_till(e), "ms"
+	#print "fastest possible compilation time:", s.time_till(e), "ms"
 
 	s.record()
 	mod = SourceModule(code)
 	clean = mod.get_function("clean")
 	e.record()
 	e.synchronize()
-	print "Compilation:", s.time_till(e), "ms"
+	#print "Compilation:", s.time_till(e), "ms"
 
 	res_pin = cuda.register_host_memory(res)
 	ker_pin = cuda.register_host_memory(ker)
@@ -177,14 +177,14 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 	cuda.memcpy_htod(area_gpu, area_pin)
 	e.record()
 	e.synchronize()
-	print "transfer host to device:", s.time_till(e), "ms"
+	#print "transfer host to device:", s.time_till(e), "ms"
 
 	s.record()
 	clean.prepare("PPPPfi")
 	clean.prepared_call((1,1,1), (1,1,1), res_gpu, ker_gpu, mdl_gpu, area_gpu, tol, stop_if_div)
 	e.record()
 	e.synchronize()
-	print "kernel execution:", s.time_till(e), "ms"
+	#print "kernel execution:", s.time_till(e), "ms"
 
 	cuda.memcpy_dtoh(mdl_pin, mdl_gpu)
 

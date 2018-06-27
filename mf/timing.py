@@ -39,7 +39,7 @@ print "done making it"
 
 
 s.record()
-mf.MedianFilter(kernel_size=(17, 17), input=inListBig)
+[mf.MedianFilter(kernel_size=(17, 17), input=elem) for elem in inListBig]
 e.record()
 e.synchronize()
 print "QUICKSELECT MEDFILT w/ 100 IMAGES: ", s.time_till(e), "ms"
