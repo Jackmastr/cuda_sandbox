@@ -58,24 +58,18 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 		}
 
 		q = 1/q;
-		/* The CLEAN loop */
+		/* The clean loop */
 		for (int i = 0; i < %(MAXITER)s; i++)
 		{
 			nscore = 0;
 			mmax = -1;
-			step = %(GAIN)s * max * q;
+			step = (float) %(GAIN)s * max * q;
+			// WHY IS ARGMAX STARTING AT ZERO?
 			mdl[argmax] += step;
-
 			/* Take the next step and compute score */
 			for (int n = 0; n < %(DIM)s; n++)
 			{
-				if (n + argmax >= %(DIM)s)
-				{
-					wrap_n = (n + argmax) - %(DIM)s;
-				} else
-				{
-					wrap_n = (n + argmax);
-				}
+				wrap_n = (n + argmax) %% %(DIM)s;
 				res[wrap_n] -= ker[n] * step;
 				val = res[wrap_n];
 				mval = val * val;
@@ -93,8 +87,50 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 			{
 				firstscore = nscore;
 			}
+			if (score > 0 && nscore > score)
+			{
+				if (stop_if_div)
+				{
+					/* We have diverged: undo last step and give up */
+					mdl[argmax] -= step;
+					for (int n = 0; n < %(DIM)s; n++)
+					{
+						wrap_n = (n + argmax) %% %(DIM)s;
+						res[wrap_n] += ker[n] * step;
+					}
+					return;
+				} else if (best_score < 0 || score < best_score)
+				{
+					/* We've diverged: save prev score in case global best */
+					for (int n = 0; n < %(DIM)s; n++)
+					{
+						wrap_n = (n + argmax) %% %(DIM)s;
+						best_mdl[n] = mdl[n];
+						best_res[wrap_n] = res[wrap_n] + ker[n] * step;
+					}
+					best_mdl[argmax] -= step;
+					best_score = score;
+					i = 0; // Reset maxiter counter
+				}
+			} else if (score > 0 && (score - nscore) / firstscore < tol)
+			{
+				return;
+			} else if (!stop_if_div && (best_score < 0 || nscore < best_score))
+			{
+				i = 0; // Reset maxiter counter
+			}
+
 			score = nscore;
 			argmax = nargmax;
+		}
+		/* If end on maxiter make sure mdl/res reflect best score */
+		if (best_score > 0 && best_score < nscore)
+		{
+			for (int n = 0; n < %(DIM)s; n++)
+			{
+				mdl[n] = best_mdl[n];
+				res[n] = best_res[n];
+			}
 		}
 	}
 	"""
@@ -104,8 +140,25 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 		'GAIN': gain,
 	}
 
+	quickcode = """
+	__global__ void x(int* a)
+	{
+		a[0] += 1;
+	}
+	"""
+	s.record()
+	quickmod = SourceModule(quickcode)
+	x = quickmod.get_function("x")
+	e.record()
+	e.synchronize()
+	print "fastest possible compilation time:", s.time_till(e), "ms"
+
+	s.record()
 	mod = SourceModule(code)
 	clean = mod.get_function("clean")
+	e.record()
+	e.synchronize()
+	print "Compilation:", s.time_till(e), "ms"
 
 	res_pin = cuda.register_host_memory(res)
 	ker_pin = cuda.register_host_memory(ker)
@@ -117,17 +170,22 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 	mdl_gpu = cuda.mem_alloc(mdl.nbytes)
 	area_gpu = cuda.mem_alloc(area.nbytes)
 
-
+	s.record()
 	cuda.memcpy_htod(res_gpu, res_pin)
 	cuda.memcpy_htod(ker_gpu, ker_pin)
 	cuda.memcpy_htod(mdl_gpu, mdl_pin)
 	cuda.memcpy_htod(area_gpu, area_pin)
+	e.record()
+	e.synchronize()
+	print "transfer host to device:", s.time_till(e), "ms"
 
-
+	s.record()
 	clean.prepare("PPPPfi")
 	clean.prepared_call((1,1,1), (1,1,1), res_gpu, ker_gpu, mdl_gpu, area_gpu, tol, stop_if_div)
+	e.record()
+	e.synchronize()
+	print "kernel execution:", s.time_till(e), "ms"
 
+	cuda.memcpy_dtoh(mdl_pin, mdl_gpu)
 
-	cuda.memcpy_dtoh(res_pin, res_gpu)
-
-	return res_pin
+	return mdl_pin
