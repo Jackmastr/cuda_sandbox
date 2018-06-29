@@ -16,7 +16,7 @@ ker = np.random.rand(dim)
 # ker = np.array([3,2,0,0,0,0,0,0,0,0,0,2]*10, dtype=np.float)
 
 s.record()
-deconv.clean(img, ker, verbose=True)
+deconv.clean(img, ker)
 e.record()
 e.synchronize()
 print "AIPY DECONVOLUTION:", s.time_till(e), "ms"
