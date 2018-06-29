@@ -11,8 +11,8 @@ import scipy.signal as sps
 
 def MedianFilter(input=None, kernel_size=3, bw=40, bh=24):
 
-	s = cuda.Event()
-	e = cuda.Event()
+	#s = cuda.Event()
+	#e = cuda.Event()
 
 	input_list = input
 
@@ -220,7 +220,7 @@ def MedianFilter(input=None, kernel_size=3, bw=40, bh=24):
 		}
 
 
-		__global__ void mf_shared(float* out, int imgDimY, int imgDimX)
+		__global__ void mf_shared(float *in, float* out, int imgDimY, int imgDimX)
 		{			
 
 			const int TSx = %(BX)s + %(WSx)s - 1;
@@ -243,8 +243,8 @@ def MedianFilter(input=None, kernel_size=3, bw=40, bh=24):
 				for (int i = 0; i < TSy && i < imgDimY - blockIdx.y * blockDim.y; i++)
 				{
 					imgY = blockIdx.y * blockDim.y + i;
-					//tile[thread_index][i] = in[imgX * imgDimY + imgY];
-					tile[thread_index][i] = tex2D(tex, (float) imgY, (float) imgX);
+					tile[thread_index][i] = in[imgX * imgDimY + imgY];
+					//tile[thread_index][i] = tex2D(tex, (float) imgY, (float) imgX);
 				}
 
 			}
@@ -358,7 +358,7 @@ def MedianFilter(input=None, kernel_size=3, bw=40, bh=24):
 
 		if 0 <= i < nStreams:
 			st = stream[i]
-			#cuda.matrix_to_texref(in_pin_list[i], texref, order="C")
+			# cuda.matrix_to_texref(in_pin_list[i], texref, order="C")
 			in_gpu_list[i] = cuda.mem_alloc(imgBytes)
 			cuda.memcpy_htod_async(in_gpu_list[i], in_pin_list[i], stream=st)
 

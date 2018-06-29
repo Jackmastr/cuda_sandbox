@@ -12,14 +12,17 @@ dim = 1024
 img = np.random.rand(dim)
 ker = np.random.rand(dim)
 
+# img = np.array([0,0,0,4,6,4,0,0,-2,-3,-2,0]*10, dtype=np.float)
+# ker = np.array([3,2,0,0,0,0,0,0,0,0,0,2]*10, dtype=np.float)
+
 s.record()
-[deconv.clean(img, ker) for i in xrange(1000)]
+deconv.clean(img, ker, verbose=True)
 e.record()
 e.synchronize()
 print "AIPY DECONVOLUTION:", s.time_till(e), "ms"
 
 s.record()
-[clean(img, ker) for i in xrange(1000)]
+clean(img, ker)
 e.record()
 e.synchronize()
 print "PYCUDA DECONVOLUTION:", s.time_till(e), "ms"
