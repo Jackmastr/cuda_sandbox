@@ -3,26 +3,50 @@ import pycuda.driver as cuda
 import numpy as np 
 from aipy import deconv
 import time
+from hera_sim import foregrounds
+import random
+
+import warnings
+warnings.filterwarnings("ignore")
+
+fqs = np.linspace(.1,.2,1024,endpoint=False)
+lsts = np.linspace(0,2*np.pi,10000, endpoint=False)
+bl_len_ns = 30.
+vis_fg_pntsrc = foregrounds.pntsrc_foreground(lsts, fqs, bl_len_ns, nsrcs=200)
+img0 = np.array(vis_fg_pntsrc[100], dtype=np.float32)
+img1 = np.array(vis_fg_pntsrc[500], dtype=np.float32)
+img2 = np.array(vis_fg_pntsrc[700], dtype=np.float32)
+ker = np.ones(1024)
+
+A = set()
+while len(A) < 160:
+	A.add(random.randint(0, 1024))
+for i in xrange(len(ker)):
+	if i in A:
+		ker[i] = 0
+
+ker = np.array(ker, dtype=np.float32)
 
 s = cuda.Event()
 e = cuda.Event()
-
-dim = 1024
-
-img = np.random.rand(dim)
-ker = np.random.rand(dim)
-
-# img = np.array([0,0,0,4,6,4,0,0,-2,-3,-2,0]*10, dtype=np.float)
-# ker = np.array([3,2,0,0,0,0,0,0,0,0,0,2]*10, dtype=np.float)
-
 s.record()
-deconv.clean(img, ker)
+deconv.clean(img0, ker, stop_if_div=False)
 e.record()
 e.synchronize()
-print "AIPY DECONVOLUTION:", s.time_till(e), "ms"
+print s.time_till(e), "ms"
 
+s = cuda.Event()
+e = cuda.Event()
 s.record()
-clean(img, ker)
+deconv.clean(img1, ker, stop_if_div=False)
 e.record()
 e.synchronize()
-print "PYCUDA DECONVOLUTION:", s.time_till(e), "ms"
+print s.time_till(e), "ms"
+
+s = cuda.Event()
+e = cuda.Event()
+s.record()
+deconv.clean(img2, ker, stop_if_div=False)
+e.record()
+e.synchronize()
+print s.time_till(e), "ms"

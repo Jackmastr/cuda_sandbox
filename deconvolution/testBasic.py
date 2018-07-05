@@ -17,11 +17,15 @@ class TestCleanSimple(unittest.TestCase):
 		self.assertEqual(1, clean(res, ker, mdl, area, 0, 100, 1, 0, 1024)[-1])
 
 	def test_Default(self):
-		img = np.array([0,0,0,4,6,4,0,0,-2,-3,-2,0], dtype=np.float)
-		ker = np.array([3,2,0,0,0,0,0,0,0,0,0,2], dtype=np.float)
+		img = np.array([0,0,0,4,6,4,0,0,-2,-3,-2,0], dtype=np.float32)
+		ker = np.array([3,2,0,0,0,0,0,0,0,0,0,2], dtype=np.float32)
+
+		print deconv.clean(img, ker, verbose=True)[0]
+		print clean(img, ker)[0]
+
 
 		for i in xrange(12):
-			self.assertAlmostEqual(deconv.clean(img, ker)[0][i], clean(img, ker)[i])
+			self.assertAlmostEqual(deconv.clean(img, ker)[0][i], clean(img, ker)[0][i])
 
 	def test_RandomInput(self):
 		dim = 25
@@ -29,7 +33,7 @@ class TestCleanSimple(unittest.TestCase):
 		ker = np.random.rand(dim)
 
 		for i in xrange(dim):
-			self.assertAlmostEqual(deconv.clean(img, ker)[0][i], clean(img, ker)[i])
+			self.assertAlmostEqual(deconv.clean(img, ker)[0][i], clean(img, ker)[0][i])
 
 
 
