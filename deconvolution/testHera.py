@@ -1,4 +1,4 @@
-#from CLEAN import clean
+from CLEAN import clean
 import pycuda.driver as cuda
 import pycuda.autoinit
 from pycuda.compiler import SourceModule
@@ -9,8 +9,12 @@ import aipy
 from aipy import deconv
 import random
 
+import warnings
+warnings.filterwarnings("ignore")
+
 class TestHera(unittest.TestCase):
 	def test_foregrounds(self):
+
 		fqs = np.linspace(.1,.2,1024,endpoint=False)
 		lsts = np.linspace(0,2*np.pi,10000, endpoint=False)
 		bl_len_ns = 30.
@@ -29,30 +33,22 @@ class TestHera(unittest.TestCase):
 		
 		ker = np.array(ker, dtype=np.float32)
 
-		s = cuda.Event()
-		e = cuda.Event()
-		s.record()
-		deconv.clean(img0, ker, stop_if_div=False)
-		e.record()
-		e.synchronize()
-		print s.time_till(e), "ms"
+		A0 = deconv.clean(img0, ker, stop_if_div=False, tol=0)[0]
+		A1 = deconv.clean(img1, ker, stop_if_div=False, tol=0)[0]
+		A2 = deconv.clean(img2, ker, stop_if_div=False, tol=0)[0]
 
-		s = cuda.Event()
-		e = cuda.Event()
-		s.record()
-		deconv.clean(img1, ker, stop_if_div=False)
-		e.record()
-		e.synchronize()
-		print s.time_till(e), "ms"
+		B0 = clean(img0, ker, stop_if_div=False, tol=0)[0]
+		B1 = clean(img1, ker, stop_if_div=False, tol=0)[0]
+		B2 = clean(img2, ker, stop_if_div=False, tol=0)[0]
 
-		s = cuda.Event()
-		e = cuda.Event()
-		s.record()
-		deconv.clean(img2, ker, stop_if_div=False)
-		e.record()
-		e.synchronize()
-		print s.time_till(e), "ms"
+		for i in xrange(1024):
+			self.assertAlmostEqual(A0[i], B0[i], places=5)
 
+		for i in xrange(1024):
+			self.assertAlmostEqual(A1[i], B1[i], places=5)
+
+		for i in xrange(1024):
+			self.assertAlmostEqual(A2[i], B2[i], places=5)
 
 
 

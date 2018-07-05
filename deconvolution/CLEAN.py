@@ -11,7 +11,7 @@ from skcuda import cublas
 import pycuda.gpuarray as gpuarray
 from math import sqrt
 
-def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop_if_div=True, verbose=False, blockDimX=512):
+def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop_if_div=True, verbose=False, blockDimX=1024):
 	s = cuda.Event()
 	e = cuda.Event()
 
@@ -42,6 +42,9 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 	#grid=(1,1,1)
 
 	code = """
+
+		texture<float, 1> tex_ker;
+
 		__global__ void compute_res(float *res, float *ker, float step, float *square_res, int* area, int argmax)
 		{
 			const int index = threadIdx.x + blockDim.x * blockIdx.x;
@@ -55,6 +58,11 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 			}
 		}
 
+		__global__ void doNothing(float *res, float *ker, float step, float *square_res, int* area, int argmax)
+		{
+			// just to compare how long it takes
+		}
+
 		__global__ void square_ker(float *ker, float *square_ker, int *area)
 		{
 			const int index = threadIdx.x + blockDim.x * blockIdx.x;
@@ -65,14 +73,16 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 			}
 		}
 
-		__global__ void bufMaxRes(float *res, float *best_res, int *area)
+		__global__ void bufMaxRes(float *res, float *best_res, float *ker, int *area, float step, int argmax)
 		{
 			const int index = threadIdx.x + blockDim.x * blockIdx.x;
 			if (index < %(DIM)s && area[index])
 			{
-				best_res[index] = res[index];
+				int wrapped_index = (index + argmax) %% %(DIM)s;
+				best_res[wrapped_index] = res[wrapped_index] + ker[index] * step;
 			}
 		}
+
 
 	
 	"""
@@ -80,11 +90,12 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 		'DIM': dim,
 		'BX': blockDimX,
 	}
-
 	mod = SourceModule(code)
+
 	compute_res = mod.get_function("compute_res")
 	square_ker = mod.get_function("square_ker")
 	bufMaxRes = mod.get_function("bufMaxRes")
+	doNothing = mod.get_function("doNothing")
 
 	res_pin = cuda.register_host_memory(res)
 	ker_pin = cuda.register_host_memory(ker)
@@ -97,11 +108,12 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 	# Additional buffers that may be needed
 	square_res_gpu = gpuarray.empty(res.shape, np.float32)
 	square_ker_gpu = gpuarray.empty(ker.shape, np.float32)
-	best_res = cuda.mem_alloc(res.nbytes)
+	best_res_gpu = cuda.mem_alloc(res.nbytes)
 
 	cuda.memcpy_htod(res_gpu, res_pin)
 	cuda.memcpy_htod(ker_gpu, ker_pin)
 	cuda.memcpy_htod(area_gpu, area_pin)
+
 
 	# Variables needed on the host side
 	firstscore = -1
@@ -110,6 +122,9 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 	argmax = np.int32(0)
 	max = 0
 	best_mdl = None
+
+	tot_timeCR = 0
+	tot_timeDN = 0
 
 	# Compute the gain/phase of the kernel to start out
 	h = cublas.cublasCreate()
@@ -128,7 +143,17 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 
 		mdl[argmax] += step
 
+		s.record()
 		compute_res(res_gpu, ker_gpu, step, square_res_gpu, area_gpu, argmax, block=block, grid=grid)
+		e.record()
+		e.synchronize()
+		tot_timeCR += s.time_till(e)
+
+		s.record()
+		doNothing(res_gpu, ker_gpu, step, square_res_gpu, area_gpu, argmax, block=block, grid=grid)
+		e.record()
+		e.synchronize()
+		tot_timeDN += s.time_till(e)
 
 		nscore = cublas.cublasSasum(h, square_res_gpu.size, square_res_gpu.gpudata, 1)
 
@@ -152,8 +177,8 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 
 			elif best_score < 0 or score < best_score:
 				# Diverged ---> buf prev score in case maximum
-				best_mdl = mdl
-				bufMaxRes(res, best_res, area_gpu, block=block, grid=grid)
+				best_mdl = list(mdl)
+				bufMaxRes(res_gpu, best_res_gpu, ker_gpu, area_gpu, step, argmax, block=block, grid=grid)
 
 				best_mdl[argmax] -= step
 				best_score = score
@@ -172,9 +197,14 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 
 		# Find new max and update model
 		nargmax = cublas.cublasIsamax(h, square_res_gpu.size, square_res_gpu.gpudata, 1)
+
 		
 		""" PROBABLY A FASTER WAY THAN THIS """
+
 		cuda.memcpy_dtoh(res_pin, res_gpu)
+
+
+
 		max = res_pin[nargmax]
 
 		score = nscore
@@ -183,10 +213,12 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 		n += 1
 
 
-	#print "my number of iterations:", n
+	print "EVERY DONOTHING:", tot_timeDN, "ms"
+	print "EVERY COMPUTE_RES:", tot_timeCR, "ms"
+	print "DIF =", tot_timeCR - tot_timeDN, "ms"
 
 	if best_score > 0 and best_score < nscore:
-		cuda.memcpy_dtoh(res_pin, best_res)
+		cuda.memcpy_dtoh(res_pin, best_res_gpu)
 		mdl = best_mdl
 	else:
 		cuda.memcpy_dtoh(res_pin, res_gpu)

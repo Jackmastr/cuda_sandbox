@@ -27,10 +27,12 @@ for i in xrange(len(ker)):
 
 ker = np.array(ker, dtype=np.float32)
 
+print "AIPY CLEAN"
+
 s = cuda.Event()
 e = cuda.Event()
 s.record()
-deconv.clean(img0, ker, stop_if_div=False)
+deconv.clean(img0, ker, stop_if_div=False, tol=0)
 e.record()
 e.synchronize()
 print s.time_till(e), "ms"
@@ -38,7 +40,7 @@ print s.time_till(e), "ms"
 s = cuda.Event()
 e = cuda.Event()
 s.record()
-deconv.clean(img1, ker, stop_if_div=False)
+deconv.clean(img1, ker, stop_if_div=False, tol=0)
 e.record()
 e.synchronize()
 print s.time_till(e), "ms"
@@ -46,7 +48,33 @@ print s.time_till(e), "ms"
 s = cuda.Event()
 e = cuda.Event()
 s.record()
-deconv.clean(img2, ker, stop_if_div=False)
+deconv.clean(img2, ker, stop_if_div=False, tol=0)
+e.record()
+e.synchronize()
+print s.time_till(e), "ms"
+
+print "MY CLEAN"
+
+s = cuda.Event()
+e = cuda.Event()
+s.record()
+clean(img0, ker, stop_if_div=False, tol=0)
+e.record()
+e.synchronize()
+print s.time_till(e), "ms"
+
+s = cuda.Event()
+e = cuda.Event()
+s.record()
+clean(img1, ker, stop_if_div=False, tol=0)
+e.record()
+e.synchronize()
+print s.time_till(e), "ms"
+
+s = cuda.Event()
+e = cuda.Event()
+s.record()
+clean(img2, ker, stop_if_div=False, tol=0)
 e.record()
 e.synchronize()
 print s.time_till(e), "ms"
