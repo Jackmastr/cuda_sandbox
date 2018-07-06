@@ -50,6 +50,15 @@ class TestHera(unittest.TestCase):
 		for i in xrange(1024):
 			self.assertAlmostEqual(A2[i], B2[i], places=5)
 
+	def test_spike(self):
+		ker = np.zeros(1024, dtype=np.float32)
+		ker[0] = 1
+		img = ker.copy()
+		A, info = deconv.clean(img, ker, stop_if_div=True, tol=0, maxiter=int(1e6))
+		print info['term']
+
+		clean(img, ker, stop_if_div=True, tol=0, maxiter=int(1e6))
+
 
 
 if __name__ == '__main__':

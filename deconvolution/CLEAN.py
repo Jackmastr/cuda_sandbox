@@ -45,7 +45,7 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 
 		texture<float, 1> tex_ker;
 
-		__global__ void compute_res(float *res, float *ker, float step, float *square_res, int* area, int argmax)
+		__device__ void compute_res(float *res, float *ker, float step, float *square_res, int* area, int argmax)
 		{
 			const int index = threadIdx.x + blockDim.x * blockIdx.x;
 			if (index < %(DIM)s && area[index])
@@ -63,7 +63,7 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 			// just to compare how long it takes
 		}
 
-		__global__ void square_ker(float *ker, float *square_ker, int *area)
+		__device__ void square_ker(float *ker, float *square_ker, int *area)
 		{
 			const int index = threadIdx.x + blockDim.x * blockIdx.x;
 			if (index < %(DIM)s && area[index])
@@ -73,14 +73,185 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 			}
 		}
 
-		__global__ void bufMaxRes(float *res, float *best_res, float *ker, int *area, float step, int argmax)
+		__device__ void bufBest(float *res, float *best_res, float *ker, float *mdl, float *best_mdl, int *area, float step, int argmax)
 		{
 			const int index = threadIdx.x + blockDim.x * blockIdx.x;
 			if (index < %(DIM)s && area[index])
 			{
 				int wrapped_index = (index + argmax) %% %(DIM)s;
 				best_res[wrapped_index] = res[wrapped_index] + ker[index] * step;
+				best_mdl[index] = mdl[index];
+
+				if (index == 0)
+				{
+					best_mdl[argmax] -= step;
+				}
 			}
+		}
+
+		__global__ void doEverything(float *res, float *ker, float step, float *square_res, int* area, int argmax)
+		{
+			const int index = threadIdx.x + blockDim.x * blockIdx.x;
+			if (index >= %(DIM)s)
+			{
+				return;
+			}
+
+			for (int n = 0; n < %(MAXITER)s; n++)
+			{
+				compute_res(res, ker, step, square_res, area, argmax);
+
+
+
+				//square_ker(ker, square_ker, area);
+
+				bufMaxRes(res, res, ker, area, step, argmax);
+
+				if (index == 0)
+				{
+					ker[0] += res[0];
+				}
+
+				__syncthreads();
+
+				compute_res(res, ker, step, square_res, area, argmax);
+
+				if (index == 0)
+				{
+					ker[0] -= res[0];
+				}
+
+				__syncthreads();
+
+			}
+		}
+
+		__device__ int getArgmax(float *arr)
+		{
+			return 0;
+		}
+
+		__device__ float sum(float *arr)
+		{
+			return 0;
+		}
+
+		__device__ void undoStep(float *res, float *ker, int step, int *area, int argmax)
+		{
+			return;
+		}
+
+		__device__ void overwrite(float *old, float *new)
+		{
+			const int index = threadIdx.x + blockDim.x * blockIdx.x;
+			if (index >= %(DIM)s)
+			{
+				return;
+			}
+			// can you just move the orig pointer????
+			old[index] = new[index];
+		}
+
+		__global__ void clean(float *res, float *ker, float *mdl, int *area)
+		{
+			const int index = threadIdx.x + blockDim.x * blockIdx.x;
+
+			float score = -1, nscore, best_score = -1;
+			float max = 0, mmax, step, q = 0;
+			float firstscore = -1;
+			int argmax = 0, nargmax = 0;
+
+			float best_mdl[%(DIM)s];
+			float best_res[%(DIM)s];
+			float ker_squared[%(DIM)s];
+			float res_squared[%(DIM)s];
+
+			/* Compute gain / phase of the kernel */
+			square_ker(ker, ker_squared, area);
+			q = ker[ getArgmax(ker_squared) ];
+			q = 1/q;
+
+			/* The clean loop */
+			for (int i = 0; i < %(MAXITER)s; i++)
+			{
+				nscore = 0;
+				mmax = -1;
+				step = (float) %(GAIN)s * max * q;
+
+				if (index == 0)
+				{
+					mdl[argmax] += step;
+				}
+				__syncthreads();
+
+				/* Take the next step and compute score */
+				compute_res(res, ker, step, res_squared, area, argmax);
+
+				__syncthreads(); // Not sure if this is needed
+
+				max = res[ getArgmax(res_squared) ];
+				nscore = sum(res_squared);
+
+				__syncthreads(); // Not sure if this is needed
+
+				if (index == 0)
+				{
+					nscore = sqrt(nscore/%(DIM)s);
+				}
+
+				__synchthreads();
+
+				if (firstscore < 0)
+				{
+					firstscore = nscore;
+				}
+
+				if (score > 0 && nscore > score)
+				{
+					if (%(STOPIFDIV)s)
+					{
+						if (index == 0)
+						{
+							mdl[argmax] -= step;
+						}
+						__syncthreads();
+
+						undoStep(res, ker, step, area, argmax)
+
+						return;
+					}
+					else if (best_score < 0 || score < best_score)
+					{
+						/* We've diverged so buf prev score in case global best */
+						bufMaxRes(res, best_res, ker, mdl, best_mdl, area, step, argmax);
+						__syncthreads();
+						best_score = score;
+						i = 0;
+					}
+
+				}
+				else if (score > 0 && (score - nscore) / firstscore < tol)
+				{
+					/* We're done! */
+					return;
+				}
+				else if (%(STOPIFDIV)s == 0 && (best_score < 0 || nscore < best_score)
+				{
+					/* Reset maxiter counter */
+					i = 0;
+				}
+
+				score = nscore;
+				argmax = nargmax;
+
+			}
+			/* If we end on maxiter, then make sure mdl/res reflect best_score
+			if (best_score > 0 && best_score < nscore)
+			{
+				overwrite(mdl, best_mdl);
+				overwrite(res, best_res);
+			}
+
 		}
 
 
@@ -89,13 +260,19 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 	code = code % {
 		'DIM': dim,
 		'BX': blockDimX,
+		'MAXITER': maxiter,
+		'GAIN': gain,
+		'STOPIFDIV': int(stop_if_div)
 	}
 	mod = SourceModule(code)
+	#tex_ker = mod.get_texref("tex_ker")
+	#cuda.matrix_to_texref(np.array([ker]), tex_ker, order="C")
 
-	compute_res = mod.get_function("compute_res")
-	square_ker = mod.get_function("square_ker")
-	bufMaxRes = mod.get_function("bufMaxRes")
-	doNothing = mod.get_function("doNothing")
+	# compute_res = mod.get_function("compute_res")
+	# square_ker = mod.get_function("square_ker")
+	# bufMaxRes = mod.get_function("bufMaxRes")
+	# doNothing = mod.get_function("doNothing")
+	doEverything = mod.get_function("doEverything")
 
 	res_pin = cuda.register_host_memory(res)
 	ker_pin = cuda.register_host_memory(ker)
@@ -129,13 +306,28 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 	# Compute the gain/phase of the kernel to start out
 	h = cublas.cublasCreate()
 
-	square_ker(ker_gpu, square_ker_gpu, area_gpu, block=block, grid=grid)
-	ker_argmax = cublas.cublasIsamax(h, square_ker_gpu.size, square_ker_gpu.gpudata, 1)
-	cuda.memcpy_dtoh(ker_pin, ker_gpu)
-	ker_max = ker_pin[ker_argmax]
-	q = 1/ker_max
+	# square_ker(ker_gpu, square_ker_gpu, area_gpu, block=block, grid=grid)
+	# ker_argmax = cublas.cublasIsamax(h, square_ker_gpu.size, square_ker_gpu.gpudata, 1)
+	# cuda.memcpy_dtoh(ker_pin, ker_gpu)
+	# ker_max = ker_pin[ker_argmax]
+	# q = 1/ker_max
 
-	n = 0
+	# n = 0
+
+	# compute_res.prepare("PPfPPi")
+	# doNothing.prepare("PPfPPi")
+
+	step = 0.1
+
+	s.record()
+	doEverything.prepare("PPfPPi")
+	doEverything.prepared_call(grid, block, res_gpu, ker_gpu, step, square_res_gpu.gpudata, area_gpu, argmax)
+	e.record()
+	e.synchronize()
+	print "DO EVERYTHING TAKES:", s.time_till(e), "ms"
+
+	return;
+
 	while n < maxiter:
 
 		nscore = 0
@@ -143,17 +335,17 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 
 		mdl[argmax] += step
 
-		s.record()
-		compute_res(res_gpu, ker_gpu, step, square_res_gpu, area_gpu, argmax, block=block, grid=grid)
-		e.record()
-		e.synchronize()
-		tot_timeCR += s.time_till(e)
+		# s.record()
+		compute_res.prepared_call(grid, block, res_gpu, ker_gpu, step, square_res_gpu.gpudata, area_gpu, argmax)
+		# e.record()
+		# e.synchronize()
+		# tot_timeCR += s.time_till(e)
 
-		s.record()
-		doNothing(res_gpu, ker_gpu, step, square_res_gpu, area_gpu, argmax, block=block, grid=grid)
-		e.record()
-		e.synchronize()
-		tot_timeDN += s.time_till(e)
+		# s.record()
+		doNothing.prepared_call(block, grid, res_gpu, ker_gpu, step, square_res_gpu.gpudata, area_gpu, argmax)
+		# e.record()
+		# e.synchronize()
+		# tot_timeDN += s.time_till(e)
 
 		nscore = cublas.cublasSasum(h, square_res_gpu.size, square_res_gpu.gpudata, 1)
 
@@ -171,7 +363,7 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 			if stop_if_div:
 				# Diverged ---> so undo and quit
 				mdl[argmax] -= step
-				compute_res(res_gpu, ker_gpu, -step, square_res_gpu, area_gpu, argmax, block=block, grid=grid)
+				compute_res(res_gpu, -step, square_res_gpu, area_gpu, argmax, block=block, grid=grid)
 				#print "stopped because it diverged"
 				break
 
@@ -213,9 +405,9 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 		n += 1
 
 
-	print "EVERY DONOTHING:", tot_timeDN, "ms"
-	print "EVERY COMPUTE_RES:", tot_timeCR, "ms"
-	print "DIF =", tot_timeCR - tot_timeDN, "ms"
+	# print "EVERY DONOTHING:", tot_timeDN, "ms"
+	# print "EVERY COMPUTE_RES:", tot_timeCR, "ms"
+	# print "DIF =", tot_timeCR - tot_timeDN, "ms"
 
 	if best_score > 0 and best_score < nscore:
 		cuda.memcpy_dtoh(res_pin, best_res_gpu)
