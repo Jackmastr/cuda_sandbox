@@ -32,33 +32,33 @@ print "AIPY CLEAN"
 s = cuda.Event()
 e = cuda.Event()
 s.record()
-deconv.clean(img0, ker, stop_if_div=False, tol=0)
+deconv.clean(img0, ker, stop_if_div=False, tol=0, maxiter=100000)
 e.record()
 e.synchronize()
 print s.time_till(e), "ms"
 
-s = cuda.Event()
-e = cuda.Event()
-s.record()
-deconv.clean(img1, ker, stop_if_div=False, tol=0)
-e.record()
-e.synchronize()
-print s.time_till(e), "ms"
+# s = cuda.Event()
+# e = cuda.Event()
+# s.record()
+# deconv.clean(img1, ker, stop_if_div=False, tol=0, maxiter=100000)
+# e.record()
+# e.synchronize()
+# print s.time_till(e), "ms"
 
-s = cuda.Event()
-e = cuda.Event()
-s.record()
-deconv.clean(img2, ker, stop_if_div=False, tol=0)
-e.record()
-e.synchronize()
-print s.time_till(e), "ms"
+# s = cuda.Event()
+# e = cuda.Event()
+# s.record()
+# deconv.clean(img2, ker, stop_if_div=False, tol=0, maxiter=100000)
+# e.record()
+# e.synchronize()
+# print s.time_till(e), "ms"
 
 print "MY CLEAN"
 
 s = cuda.Event()
 e = cuda.Event()
 s.record()
-clean(img0, ker, stop_if_div=False, tol=0)
+clean(img0, ker, stop_if_div=False, tol=0, maxiter=100000)
 e.record()
 e.synchronize()
 print s.time_till(e), "ms"
@@ -66,7 +66,7 @@ print s.time_till(e), "ms"
 s = cuda.Event()
 e = cuda.Event()
 s.record()
-clean(img1, ker, stop_if_div=False, tol=0)
+clean(img1, ker, stop_if_div=False, tol=0, maxiter=100000)
 e.record()
 e.synchronize()
 print s.time_till(e), "ms"
@@ -74,7 +74,7 @@ print s.time_till(e), "ms"
 s = cuda.Event()
 e = cuda.Event()
 s.record()
-clean(img2, ker, stop_if_div=False, tol=0)
+clean(img2, ker, stop_if_div=False, tol=0, maxiter=100000)
 e.record()
 e.synchronize()
 print s.time_till(e), "ms"

@@ -45,15 +45,19 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 
 		texture<float, 1> tex_ker;
 
+		__shared__ float shared_ker[%(DIM)s];
+
 		__device__ void compute_res(float *res, float *ker, float step, float *square_res, int* area, int argmax)
 		{
 			const int index = threadIdx.x + blockDim.x * blockIdx.x;
+
+
+
 			if (index < %(DIM)s && area[index])
 			{
 				int wrapped_index = (index + argmax) %% %(DIM)s;
-				res[wrapped_index] -= ker[index] * step;
+				res[wrapped_index] -= shared_ker[index] * step;
 				float res_at_wrapped = res[wrapped_index];
-				// ASK ABOUT 'AREA' IN THIS CASE
 				square_res[wrapped_index] = res_at_wrapped * res_at_wrapped;
 			}
 		}
@@ -79,7 +83,7 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 			if (index < %(DIM)s && area[index])
 			{
 				int wrapped_index = (index + argmax) %% %(DIM)s;
-				best_res[wrapped_index] = res[wrapped_index] + ker[index] * step;
+				best_res[wrapped_index] = res[wrapped_index] + shared_ker[index] * step;
 				best_mdl[index] = mdl[index];
 
 				if (index == 0)
@@ -97,31 +101,35 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 				return;
 			}
 
+
+			shared_ker[index] = ker[index];
+
+
 			for (int n = 0; n < %(MAXITER)s; n++)
 			{
-				compute_res(res, ker, step, square_res, area, argmax);
+				//compute_res(res, ker, step, square_res, area, argmax);
 
 
 
 				//square_ker(ker, square_ker, area);
 
-				bufBest(res, res, ker, ker, ker, area, step, argmax);
+				//bufBest(res, res, ker, ker, ker, area, step, argmax);
 
 				if (index == 0)
 				{
 					ker[0] += res[0];
 				}
 
-				__syncthreads();
+				//__syncthreads();
 
-				compute_res(res, ker, step, square_res, area, argmax);
+				//compute_res(res, ker, step, square_res, area, argmax);
 
 				if (index == 0)
 				{
 					ker[0] -= res[0];
 				}
 
-				__syncthreads();
+				//__syncthreads();
 
 			}
 		}
@@ -186,8 +194,6 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 
 				/* Take the next step and compute score */
 				compute_res(res, ker, step, res_squared, area, argmax);
-
-				__syncthreads(); // Not sure if this is needed
 
 				nargmax = getArgmax(res_squared);
 				max = res[nargmax];
