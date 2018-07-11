@@ -105,7 +105,7 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 
 				//square_ker(ker, square_ker, area);
 
-				bufMaxRes(res, res, ker, area, step, argmax);
+				bufBest(res, res, ker, ker, ker, area, step, argmax);
 
 				if (index == 0)
 				{
@@ -126,6 +126,8 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 			}
 		}
 
+
+
 		__device__ int getArgmax(float *arr)
 		{
 			return 0;
@@ -138,18 +140,17 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 
 		__device__ void undoStep(float *res, float *ker, int step, int *area, int argmax)
 		{
-			return;
+			
 		}
 
-		__device__ void overwrite(float *old, float *new)
+		__device__ void overwrite(float *o, float *n)
 		{
 			const int index = threadIdx.x + blockDim.x * blockIdx.x;
 			if (index >= %(DIM)s)
 			{
 				return;
 			}
-			// can you just move the orig pointer????
-			old[index] = new[index];
+			o[index] = n[index];
 		}
 
 		__global__ void clean(float *res, float *ker, float *mdl, int *area)
@@ -157,7 +158,7 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 			const int index = threadIdx.x + blockDim.x * blockIdx.x;
 
 			float score = -1, nscore, best_score = -1;
-			float max = 0, mmax, step, q = 0;
+			float max = 0, step, q = 0;
 			float firstscore = -1;
 			int argmax = 0, nargmax = 0;
 
@@ -175,7 +176,6 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 			for (int i = 0; i < %(MAXITER)s; i++)
 			{
 				nscore = 0;
-				mmax = -1;
 				step = (float) %(GAIN)s * max * q;
 
 				if (index == 0)
@@ -189,7 +189,8 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 
 				__syncthreads(); // Not sure if this is needed
 
-				max = res[ getArgmax(res_squared) ];
+				nargmax = getArgmax(res_squared);
+				max = res[nargmax];
 				nscore = sum(res_squared);
 
 				__syncthreads(); // Not sure if this is needed
@@ -199,7 +200,7 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 					nscore = sqrt(nscore/%(DIM)s);
 				}
 
-				__synchthreads();
+				__syncthreads();
 
 				if (firstscore < 0)
 				{
@@ -216,26 +217,26 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 						}
 						__syncthreads();
 
-						undoStep(res, ker, step, area, argmax)
+						undoStep(res, ker, step, area, argmax);
 
 						return;
 					}
 					else if (best_score < 0 || score < best_score)
 					{
 						/* We've diverged so buf prev score in case global best */
-						bufMaxRes(res, best_res, ker, mdl, best_mdl, area, step, argmax);
+						bufBest(res, best_res, ker, mdl, best_mdl, area, step, argmax);
 						__syncthreads();
 						best_score = score;
 						i = 0;
 					}
 
 				}
-				else if (score > 0 && (score - nscore) / firstscore < tol)
+				else if (score > 0 && (score - nscore) / firstscore < %(TOL)s)
 				{
 					/* We're done! */
 					return;
 				}
-				else if (%(STOPIFDIV)s == 0 && (best_score < 0 || nscore < best_score)
+				else if (%(STOPIFDIV)s == 0 && (best_score < 0 || nscore < best_score))
 				{
 					/* Reset maxiter counter */
 					i = 0;
@@ -245,7 +246,7 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 				argmax = nargmax;
 
 			}
-			/* If we end on maxiter, then make sure mdl/res reflect best_score
+			/* If we end on maxiter, then make sure mdl/res reflect best_score */
 			if (best_score > 0 && best_score < nscore)
 			{
 				overwrite(mdl, best_mdl);
@@ -262,7 +263,8 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 		'BX': blockDimX,
 		'MAXITER': maxiter,
 		'GAIN': gain,
-		'STOPIFDIV': int(stop_if_div)
+		'STOPIFDIV': int(stop_if_div),
+		'TOL': tol,
 	}
 	mod = SourceModule(code)
 	#tex_ker = mod.get_texref("tex_ker")
@@ -319,12 +321,12 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 
 	step = 0.1
 
-	s.record()
+	# s.record()
 	doEverything.prepare("PPfPPi")
 	doEverything.prepared_call(grid, block, res_gpu, ker_gpu, step, square_res_gpu.gpudata, area_gpu, argmax)
-	e.record()
-	e.synchronize()
-	print "DO EVERYTHING TAKES:", s.time_till(e), "ms"
+	# e.record()
+	# e.synchronize()
+	#print "DO EVERYTHING TAKES:", s.time_till(e), "ms"
 
 	return;
 
