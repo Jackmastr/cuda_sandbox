@@ -7,7 +7,7 @@ import numpy as np
 import scipy.signal as sps
 
 
-def MedianFilter(input=None, kernel_size=3, bw=40, bh=24):
+def MedianFilter(input=None, kernel_size=3, bw=32, bh=32):
 
 	#s = cuda.Event()
 	#e = cuda.Event()
@@ -331,7 +331,6 @@ def MedianFilter(input=None, kernel_size=3, bw=40, bh=24):
 	in_gpu_list = [None]*nStreams
 	#out_gpu_list = [cuda.mem_alloc(pinnedImg.nbytes) for pinnedImg in in_pin_list]
 	out_gpu_list = [None]*nStreams
-
 	for i in xrange(nStreams + 2):
 		ii = i - 1
 		iii = i - 2

@@ -30,6 +30,8 @@ TEXTURE MEDFILT w/ 100 IMAGES:  20931.8085938 ms
 
 
 
+
+
 // Maybe use this, maybe ignore it and redo it?
 40x24 MEDFILT w/ 100 IMAGES:  19880.734375 ms
 (env0) jacksons@snb1:~/cuda_projs/mf$ CUDA_VISIBLE_DEVICES=0 python timing.py

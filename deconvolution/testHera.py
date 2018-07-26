@@ -39,7 +39,7 @@ class TestHera(unittest.TestCase):
 
 		B0 = clean(img0, ker, stop_if_div=False, tol=0)[0]
 		B1 = clean(img1, ker, stop_if_div=False, tol=0)[0]
-		B2 = clean(img2, ker, stop_if_div=False, tol=0)[0]
+		B2 = clean([img2]*3, [ker]*3, stop_if_div=False, tol=0)[0][1]
 
 		for i in xrange(1024):
 			self.assertAlmostEqual(A0[i], B0[i], places=5)
@@ -50,14 +50,31 @@ class TestHera(unittest.TestCase):
 		for i in xrange(1024):
 			self.assertAlmostEqual(A2[i], B2[i], places=5)
 
+
 	def test_spike(self):
 		ker = np.zeros(1024, dtype=np.float32)
 		ker[0] = 1
 		img = ker.copy()
-		A, info = deconv.clean(img, ker, stop_if_div=True, tol=0, maxiter=int(1e6))
-		print info['term']
+		A, info = deconv.clean(img, ker, stop_if_div=True, tol=0, maxiter=int(1e4))
 
-		clean(img, ker, stop_if_div=True, tol=0, maxiter=int(1e6))
+		B = clean(img, ker, stop_if_div=True, tol=0, maxiter=int(1e4))[0]
+
+		for i in xrange(1024):
+			self.assertAlmostEqual(A[i], B[i])
+
+
+	def test_spikes(self):
+		ker = np.zeros(1024, dtype=np.float32)
+		ker[0] = 1
+		img = ker.copy()
+		A, info = deconv.clean(img, ker, stop_if_div=True, tol=0, maxiter=int(1e4))
+
+		B = clean([img]*10, [ker]*10, stop_if_div=True, tol=0, maxiter=int(1e4))[0]
+
+		for i in xrange(1024):
+			self.assertAlmostEqual(A[i], B[6][i])
+
+
 
 
 
