@@ -97,3 +97,62 @@ Pitfalls & Things I Learned:
 - Talk about testing (problems)
 
 - Talk about timing (problems) - Caching for the compilations
+
+
+
+
+
+40x24 MEDFILT w/ 100 IMAGES:  59978.25 ms
+(env0) jacksons@snb1:~/cuda_projs/mf$ CUDA_VISIBLE_DEVICES=0 python timing.py
+done making it
+40x24 MEDFILT w/ 100 IMAGES:  53365.6640625 ms
+(env0) jacksons@snb1:~/cuda_projs/mf$ CUDA_VISIBLE_DEVICES=0 python timing.py
+done making it
+40x24 MEDFILT w/ 100 IMAGES:  47305.984375 ms
+(env0) jacksons@snb1:~/cuda_projs/mf$ CUDA_VISIBLE_DEVICES=0 python timing.py
+done making it
+40x24 MEDFILT w/ 100 IMAGES:  21245.7675781 ms
+(env0) jacksons@snb1:~/cuda_projs/mf$ CUDA_VISIBLE_DEVICES=0 python timing.py
+done making it
+40x24 MEDFILT w/ 100 IMAGES:  22022.7578125 ms
+(env0) jacksons@snb1:~/cuda_projs/mf$ CUDA_VISIBLE_DEVICES=0 python timing.py
+done making it
+40x24 MEDFILT w/ 100 IMAGES:  21471.7519531 ms
+(env0) jacksons@snb1:~/cuda_projs/mf$ CUDA_VISIBLE_DEVICES=0 python timing.py
+done making it
+40x24 MEDFILT w/ 100 IMAGES:  21070.3828125 ms
+(env0) jacksons@snb1:~/cuda_projs/mf$ CUDA_VISIBLE_DEVICES=0 python timing.py
+done making it
+40x24 MEDFILT w/ 100 IMAGES:  20891.6542969 ms
+(env0) jacksons@snb1:~/cuda_projs/mf$ CUDA_VISIBLE_DEVICES=0 python timing.py
+done making it
+40x24 MEDFILT w/ 100 IMAGES:  21063.0039062 ms
+(env0) jacksons@snb1:~/cuda_projs/mf$ CUDA_VISIBLE_DEVICES=0 python timing.py
+done making it
+40x24 MEDFILT w/ 100 IMAGES:  21000.3984375 ms
+(env0) jacksons@snb1:~/cuda_projs/mf$ CUDA_VISIBLE_DEVICES=0 python timing.py
+done making it
+40x24 MEDFILT w/ 100 IMAGES:  21046.6972656 ms
+(env0) jacksons@snb1:~/cuda_projs/mf$ CUDA_VISIBLE_DEVICES=0 python timing.py
+done making it
+40x24 MEDFILT w/ 100 IMAGES:  20964.2207031 ms
+(env0) jacksons@snb1:~/cuda_projs/mf$ CUDA_VISIBLE_DEVICES=0 python timing.py
+done making it
+40x24 MEDFILT w/ 100 IMAGES:  22438.7539062 ms
+(env0) jacksons@snb1:~/cuda_projs/mf$ CUDA_VISIBLE_DEVICES=0 python timing.py
+done making it
+40x24 MEDFILT w/ 100 IMAGES:  21115.2773438 ms
+(env0) jacksons@snb1:~/cuda_projs/mf$ CUDA_VISIBLE_DEVICES=0 python timing.py
+done making it
+40x24 MEDFILT w/ 100 IMAGES:  22663.0605469 ms
+(env0) jacksons@snb1:~/cuda_projs/mf$ CUDA_VISIBLE_DEVICES=0 python timing.py
+done making it
+40x24 MEDFILT w/ 100 IMAGES:  19747.5019531 ms
+(env0) jacksons@snb1:~/cuda_projs/mf$ CUDA_VISIBLE_DEVICES=0 python timing.py
+done making it
+40x24 MEDFILT w/ 100 IMAGES:  20027.2753906 ms
+(env0) jacksons@snb1:~/cuda_projs/mf$ CUDA_VISIBLE_DEVICES=0 python timing.py
+done making it
+40x24 MEDFILT w/ 100 IMAGES:  19890.9472656 ms
+(env0) jacksons@snb1:~/cuda_projs/mf$ 
+

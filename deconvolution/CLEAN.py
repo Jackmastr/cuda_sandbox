@@ -18,7 +18,7 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 
 	gain = np.float64(gain)
 	maxiter = np.int32(maxiter)
-	tol = np.float64(tol)
+	tol = np.float32(tol)
 	stop_if_div = np.int32(stop_if_div)
 
 
@@ -65,122 +65,7 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 	#include <cuComplex.h>
 	#include <stdio.h>
 
-
-	__global__ cleanC(float *resP, float *kerP, float *mdlP, int *areaP, double tol, int stop_if_div)
-	{
-        T maxr=0, maxi=0, valr, vali, stepr, stepi, qr=0, qi=0;
-        T score=-1, nscore, best_score=-1;
-        T mmax, mval, mq=0;
-        T firstscore=-1;
-        int argmax=0, nargmax=0, dim=DIM(res,0), wrap_n;
-        T *best_mdl=NULL, *best_res=NULL;
-        if (!stop_if_div) {
-            best_mdl = (T *)malloc(2*dim*sizeof(T));
-            best_res = (T *)malloc(2*dim*sizeof(T));
-        }
-        // Compute gain/phase of kernel
-        for (int n=0; n < dim; n++) {
-            valr = CIND1R(ker,n,T);
-            vali = CIND1I(ker,n,T);
-            mval = valr * valr + vali * vali;
-            if (mval > mq && IND1(area,n,int)) {
-                mq = mval;
-                qr = valr;
-                qi = vali;
-            }
-        }
-        qr /= mq;
-        qi = -qi / mq;
-        // The clean loop
-        for (int i=0; i < maxiter; i++) {
-            nscore = 0;
-            mmax = -1;
-            stepr = (T) gain * (maxr * qr - maxi * qi);
-            stepi = (T) gain * (maxr * qi + maxi * qr);
-            CIND1R(mdl,argmax,T) += stepr;
-            CIND1I(mdl,argmax,T) += stepi;
-            // Take next step and compute score
-            for (int n=0; n < dim; n++) {
-                wrap_n = (n + argmax) % dim;
-                CIND1R(res,wrap_n,T) -= CIND1R(ker,n,T) * stepr - \
-                                        CIND1I(ker,n,T) * stepi;
-                CIND1I(res,wrap_n,T) -= CIND1R(ker,n,T) * stepi + \
-                                        CIND1I(ker,n,T) * stepr;
-                valr = CIND1R(res,wrap_n,T);
-                vali = CIND1I(res,wrap_n,T);
-                mval = valr * valr + vali * vali;
-                nscore += mval;
-                if (mval > mmax && IND1(area,wrap_n,int)) {
-                    nargmax = wrap_n;
-                    maxr = valr;
-                    maxi = vali;
-                    mmax = mval;
-                }
-            }
-            nscore = sqrt(nscore / dim);
-            if (firstscore < 0) firstscore = nscore;
-            if (verb != 0)
-                printf("Iter %d: Max=(%d), Score = %f, Prev = %f\n", \
-                    i, nargmax, (double) (nscore/firstscore), \
-                    (double) (score/firstscore));
-            if (score > 0 && nscore > score) {
-                if (stop_if_div) {
-                    // We've diverged: undo last step and give up
-                    CIND1R(mdl,argmax,T) -= stepr;
-                    CIND1I(mdl,argmax,T) -= stepi;
-                    for (int n=0; n < dim; n++) {
-                        wrap_n = (n + argmax) % dim;
-                        CIND1R(res,wrap_n,T) += CIND1R(ker,n,T) * stepr - CIND1I(ker,n,T) * stepi;
-                        CIND1I(res,wrap_n,T) += CIND1R(ker,n,T) * stepi + CIND1I(ker,n,T) * stepr;
-                    }
-                    return -i;
-                } else if (best_score < 0 || score < best_score) {
-                    // We've diverged: buf prev score in case it's global best
-                    for (int n=0; n < dim; n++) {
-                        wrap_n = (n + argmax) % dim;
-                        best_mdl[2*n+0] = CIND1R(mdl,n,T);
-                        best_mdl[2*n+1] = CIND1I(mdl,n,T);
-                        best_res[2*wrap_n+0] = CIND1R(res,wrap_n,T) + CIND1R(ker,n,T) * stepr - CIND1I(ker,n,T) * stepi;
-                        best_res[2*wrap_n+1] = CIND1I(res,wrap_n,T) + CIND1R(ker,n,T) * stepi + CIND1I(ker,n,T) * stepr;
-                    }
-                    best_mdl[2*argmax+0] -= stepr;
-                    best_mdl[2*argmax+1] -= stepi;
-                    best_score = score;
-                    i = 0;  // Reset maxiter counter
-                }
-            } else if (score > 0 && (score - nscore) / firstscore < tol) {
-                // We're done
-                if (best_mdl != NULL) { free(best_mdl); free(best_res); }
-                return i;
-            } else if (not stop_if_div && (best_score < 0 || nscore < best_score)) {
-                i = 0;  // Reset maxiter counter
-            }
-            score = nscore;
-            argmax = nargmax;
-        }
-        // If we end on maxiter, then make sure mdl/res reflect best score
-        if (best_score > 0 && best_score < nscore) {
-            for (int n=0; n < dim; n++) {
-                CIND1R(mdl,n,T) = best_mdl[2*n+0];
-                CIND1I(mdl,n,T) = best_mdl[2*n+1];
-                CIND1R(res,n,T) = best_res[2*n+0];
-                CIND1I(res,n,T) = best_res[2*n+1];
-            }
-        }   
-        if (best_mdl != NULL) { free(best_mdl); free(best_res); }
-        return maxiter;
-	}
-
-
-
-
-
-
-
-
-
-
-	__global__ void clean(float *resP, float *kerP, float *mdlP, int *areaP, double tol, int stop_if_div)
+	__global__ void clean(float *resP, float *kerP, float *mdlP, int *areaP, float tol, int stop_if_div)
 	{
 		const int dim = %(DIM)s;
 		const int maxiter = %(MAXITER)s;
@@ -211,6 +96,9 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
         q = 1/q;
         // The clean loop
         for (int i=0; i < maxiter; i++) {
+
+        	printf("MY CLEAN ITER NUMBER: %%d\\n", i);
+
             nscore = 0;
             mmax = -1;
             step = (float) gain * max * q;
@@ -230,7 +118,12 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
             }
             nscore = sqrt(nscore / dim);
             if (firstscore < 0) firstscore = nscore;
+
+            printf("'SCORE' is: %%f\\n", nscore/firstscore );
+            printf("score vs nscore: %%f vs %%f \\n", score, nscore);
             if (score > 0 && nscore > score) {
+            	printf("OUTER LOOP AT ITER NUMBER: %%d\\n", i);
+
                 if (stop_if_div) {
                     // We've diverged: undo last step and give up
                     *(mdl + argmax) -= step;
@@ -250,9 +143,9 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
                     best_score = score;
                     i = 0;  // Reset maxiter counter
                 }
+            printf("will the if statement work? score is: %%f, (score - nscore) / firstscore is: %%f\\n", score, (score - nscore) / firstscore);
             } else if (score > 0 && (score - nscore) / firstscore < tol) {
                 // We're done
-                if (best_mdl != NULL) { free(best_mdl); free(best_res); }
                 return;
             } else if (not stop_if_div && (best_score < 0 || nscore < best_score)) {
                 i = 0;  // Reset maxiter counter

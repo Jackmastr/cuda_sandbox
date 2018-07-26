@@ -42,13 +42,13 @@ class TestHera(unittest.TestCase):
 		B2 = clean([img2]*3, [ker]*3, stop_if_div=False, tol=0)[0][1]
 
 		for i in xrange(1024):
-			self.assertAlmostEqual(A0[i], B0[i], places=5)
+			self.assertEqual(A0[i], B0[i])
 
 		for i in xrange(1024):
-			self.assertAlmostEqual(A1[i], B1[i], places=5)
+			self.assertEqual(A1[i], B1[i])
 
 		for i in xrange(1024):
-			self.assertAlmostEqual(A2[i], B2[i], places=5)
+			self.assertEqual(A2[i], B2[i])
 
 
 	def test_spike(self):
@@ -60,7 +60,7 @@ class TestHera(unittest.TestCase):
 		B = clean(img, ker, stop_if_div=True, tol=0, maxiter=int(1e4))[0]
 
 		for i in xrange(1024):
-			self.assertAlmostEqual(A[i], B[i])
+			self.assertEqual(A[i], B[i])
 
 
 	def test_spikes(self):
@@ -72,7 +72,7 @@ class TestHera(unittest.TestCase):
 		B = clean([img]*10, [ker]*10, stop_if_div=True, tol=0, maxiter=int(1e4))[0]
 
 		for i in xrange(1024):
-			self.assertAlmostEqual(A[i], B[6][i])
+			self.assertEqual(A[i], B[6][i])
 
 
 
