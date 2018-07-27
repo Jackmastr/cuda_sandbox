@@ -37,6 +37,7 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 		mdl = np.array([np.zeros(dim)]*len(ker), dtype=np.float32)
 	else:
 		mdl = np.array(mdl, dtype=np.float32)
+		res = np.array([res[i] - np.fft.ifft(np.fft.fft(mdl[i]) * np.fft.fft(ker[i])).astype(res[i].dtype) for i in xrange(len(ker))])
 
 	if mdl.ndim == 1:
 		mdl = np.array([mdl], dtype=np.float32)
@@ -64,6 +65,7 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 
 	#include <cuComplex.h>
 	#include <stdio.h>
+	#include <cmath>
 
 	__global__ void clean(float *resP, float *kerP, float *mdlP, int *areaP, float tol, int stop_if_div)
 	{
@@ -101,7 +103,7 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 
             nscore = 0;
             mmax = -1;
-            step = (float) gain * max * q;
+            step =  gain * max * q;
             *(mdl + argmax) += step;
             // Take next step and compute score
             for (int n=0; n < dim; n++) {
@@ -118,7 +120,6 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
             }
             nscore = sqrt(nscore / dim);
             if (firstscore < 0) firstscore = nscore;
-
             printf("'SCORE' is: %%f\\n", nscore/firstscore );
             printf("score vs nscore: %%f vs %%f \\n", score, nscore);
             if (score > 0 && nscore > score) {

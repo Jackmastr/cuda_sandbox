@@ -66,15 +66,15 @@ class TestOtherSettings(unittest.TestCase):
 
 	# def test_areas(self):
 	# 	print "area"
-	# 	A0 = deconv.clean(img0, ker, stop_if_div=False, tol=0.1, area=area0)[0]
-	# 	A1 = deconv.clean(img1, ker, stop_if_div=False, tol=1e-6, area=area1)[0]
-	# 	A2 = deconv.clean(img2, ker, stop_if_div=False, tol=1e-9, area=area2)[0]
+	# 	A0 = deconv.clean(img0, ker, stop_if_div=False, tol=0, area=area0)[0]
+	# 	A1 = deconv.clean(img1, ker, stop_if_div=False, tol=0, area=area1)[0]
+	# 	A2 = deconv.clean(img2, ker, stop_if_div=False, tol=0, area=area2)[0]
 	# 	print "area1"
-	# 	B0 = clean(img0, ker, stop_if_div=False, tol=0.1, area=area0)[0]
+	# 	B0 = clean(img0, ker, stop_if_div=False, tol=0, area=area0)[0]
 	# 	print "area2"
-	# 	B1 = clean(img1, ker, stop_if_div=False, tol=1e-6, area=area1)[0]
+	# 	B1 = clean(img1, ker, stop_if_div=False, tol=0, area=area1)[0]
 	# 	print "area3"
-	# 	B2 = clean([img2]*3, [ker]*3, stop_if_div=False, tol=1e-9, area=area2)[0][1]
+	# 	B2 = clean([img2]*3, [ker]*3, stop_if_div=False, tol=0, area=area2)[0][1]
 	# 	print "five"
 	# 	for i in xrange(1024):
 	# 		self.assertEqual(A0[i], B0[i])
@@ -87,7 +87,7 @@ class TestOtherSettings(unittest.TestCase):
 
 	def test_mdls(self):
 		print "mdl"
-		A0 = deconv.clean(img0, ker, stop_if_div=False, tol=0.1, mdl=np.array(area0, dtype=np.float32))[0]
+		A0 = deconv.clean(img0, ker, stop_if_div=False, tol=0.01, mdl=np.array(area0, dtype=np.float32))[0]
 		A1 = deconv.clean(img1, ker, stop_if_div=False, tol=1e-6, mdl=np.array(area1, dtype=np.float32))[0]
 		A2 = deconv.clean(img2, ker, stop_if_div=False, tol=1e-9, mdl=np.array(area2, dtype=np.float32))[0]
 
