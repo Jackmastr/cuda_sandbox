@@ -60,6 +60,54 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 
 	# make all the arguments 1 level deeper of a pointer, use thread index to choose which one at the very start, then continue through like normal
 
+	code_complex = """
+	#pragma comment(linker, "/HEAP:40000000")
+	#include <cuComplex.h>
+	#include <stdio.h>
+	#include <cmath>
+	
+	__global__ void cleanComplex(float *res, float *ker, float *mdl, float* area, float tol, int, stop_if_div, int pos_def)
+	{
+		float maxr=0, maxi=0, valr=0, vali, stepr, stepi, qr=0, qi=0;
+		float score=-1, nscore, best_score=-1;
+		float mmax, mval, mq=0;
+		float firstscore=-1;
+		int argmax=0, nargmax=0, wrap_n;
+		
+		float best_mdl[%(DIM)s * 2];
+		float best_res[%(DIM)s * 2];
+		
+		// Compute gain/phase of kernel
+		for (int n = 0; n < $(DIM)s; n++)
+		{
+			valr = ker[2*n];
+			vali = ker[2*n + 1];
+			mval = valr * valr + vali * vali;
+			if (mval > mq && area[n])
+			{
+				mq = mval;
+				qr = valr;
+				qi = vali;
+			}
+		}
+		qr /= mq;
+		qi /= -mq;
+		// The clean loop
+		for (int i = 0; i < %(MAXITER)s; i++)
+		{
+			nscore = 0;
+			mmax = -1;
+			stepr = (float) gain * (maxr * qr - maxi * qi);
+			stepi = (float) gain * (maxr * qi + maxi * qr);
+			mdl[2 * argmax] += stepr;
+			mdl[2 * argmax] += stepi;
+			// Take next step and compute score
+			for (int n = 0; n < %(DIM)s; n++)
+			{
+				wrap_n = (n + argmax) %% dim;
+	"""
+	
+	
 	code = """
 	#pragma comment(linker, "/HEAP:40000000")
 
