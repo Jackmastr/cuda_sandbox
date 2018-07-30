@@ -1,7 +1,5 @@
 #!/usr/bin/env python
 
-# maybe try pragma loop unrolls???
-
 import pycuda.driver as cuda
 import pycuda.autoinit
 from pycuda.compiler import SourceModule
@@ -18,8 +16,11 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 
 	gain = np.float64(gain)
 	maxiter = np.int32(maxiter)
-	tol = np.float32(tol)
+	tol = np.float64(tol)
 	stop_if_div = np.int32(stop_if_div)
+
+	
+
 
 
 	res = np.array(res, dtype=np.float32)
@@ -37,7 +38,8 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 		mdl = np.array([np.zeros(dim)]*len(ker), dtype=np.float32)
 	else:
 		mdl = np.array(mdl, dtype=np.float32)
-		res = np.array([res[i] - np.fft.ifft(np.fft.fft(mdl[i]) * np.fft.fft(ker[i])).astype(res[i].dtype) for i in xrange(len(ker))])
+
+		res = np.array([res[i] - np.fft.ifft(np.fft.fft(mdl) * np.fft.fft(ker[i])).astype(res[i].dtype) for i in xrange(len(ker))])
 
 	if mdl.ndim == 1:
 		mdl = np.array([mdl], dtype=np.float32)
@@ -66,8 +68,20 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 	#include <stdio.h>
 	#include <cmath>
 	
-	__global__ void cleanComplex(float *res, float *ker, float *mdl, float* area, float tol, int, stop_if_div, int pos_def)
+	__global__ void cleanComplex(float *res, float *ker, float *mdl, float* area, int stop_if_div)
 	{
+		const int dim = %(DIM)s;
+		const int maxiter = %(MAXITER)s;
+		const double gain = %(GAIN)s;
+		const double tol = %(TOL)s;
+		const int index = blockDim.x * blockIdx.x + threadIdx.x;
+
+		float *res = resP + index * 2 * %(DIM)s;
+		float *ker = kerP + index * 2 * %(DIM)s;
+		float *mdl = mdlP + index * 2 * %(DIM)s;
+		int *area = areaP + index * 2 * %(DIM)s;
+
+
 		float maxr=0, maxi=0, valr=0, vali, stepr, stepi, qr=0, qi=0;
 		float score=-1, nscore, best_score=-1;
 		float mmax, mval, mq=0;
@@ -80,8 +94,8 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 		// Compute gain/phase of kernel
 		for (int n = 0; n < $(DIM)s; n++)
 		{
-			valr = ker[2*n];
-			vali = ker[2*n + 1];
+			valr = ker[2 * n];
+			vali = ker[2 * n + 1];
 			mval = valr * valr + vali * vali;
 			if (mval > mq && area[n])
 			{
@@ -105,6 +119,74 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 			for (int n = 0; n < %(DIM)s; n++)
 			{
 				wrap_n = (n + argmax) %% dim;
+				res[2 * wrap_n] -= ker[2 * n] * stepr - ker[2 * n + 1] * stepi;
+				res[2 * wrap_n + 1] -= ker[2 * n] * stepr + ker[2 * n + 1] * stepr;
+				valr = res[2 * wrap_n];
+				vali = res[2 * wrap_n + 1];
+				mval = valr * valr + vali * vali;
+				nscore += mval;
+				if (mval > mmax && area[wrap_n])
+				{
+					nargmax = wrap_n;
+					maxr = valr;
+					maxi = vali;
+					mmax = mval;
+				}
+			}
+			nscore = sqrt(nscore/dim);
+			if (firstscore < 0) firstscore = nscore;
+			if (score > 0 && nscore > score)
+			{
+				if (stop_if_div)
+				{
+					// We've diverged: undo last step and give up
+					mdl[2 * argmax] -= stepr;
+					mdl[2 * argmax + 1] -= stepi;
+					for (int n=0; n < dim; n++)
+					{
+						wrap_n = (n + argmax) %% dim;
+						res[2 * wrap_n] += ker[2 * n] * stepr - ker[2 * n + 1] * stepi;
+						res[2 * wrap_n + 1] += ker[2 * n] * stepi + ker[2 * n + 1] * stepr;
+					}
+					return;
+				} else if (best_score < 0 || score < best_score)
+				{
+					// We've diverged: buf prev score in case it's global best
+					for (int n=0; n < dim; n++)
+					{
+						wrap_n = (n + argmax) %% dim;
+						best_mdl[2 * n] = mdl[2 * n];
+						best_mdl[2 * n + 1] = mdl[2 * n + 1];
+						best_res[2 * wrap_n] = res[2 * wrap_n] + ker[2 * n] * stepr - ker[2 * n + 1] * stepi;
+						best_res[2 * wrap_n + 1] = res[2 * wrap_n + 1] + ker[2 * n] * stepi + ker[2 * n + 1] * stepr;
+					}
+					best_mdl[2 * argmax] -= stepr;
+					best_mdl[2 * argmax + 1] -= stepi;
+					best_score = score;
+					i = 0; // Reset maxiter counter
+				}
+			} else if (score > 0 && (score - nscore) / firstscore < tol)
+			{
+				// We're done
+				return;
+			} else if (not stop_if_div && (best_score < 0 || nscore < best_score))
+			{
+				i = 0; // Reset maxiter counter
+			}
+			score = nscore;
+			argmax = nargmax;
+		}
+		// If we end on maxiter, then make sure mdl/res reflect best score
+		if (best_score > 0 && best_score < nscore)
+		{
+			for (int n=0; n < dim; n++)
+			{
+				mdl[2 * n] = best_mdl[2 * n];
+				mdl[2 * n + 1] = best_mdl[2 * n + 1];
+				res[2 * n] = best_res[2 * n];
+				res[2 * n + 1] = best_res[2 * n + 1];
+			}
+		}
 	"""
 	
 	
@@ -115,11 +197,12 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 	#include <stdio.h>
 	#include <cmath>
 
-	__global__ void clean(float *resP, float *kerP, float *mdlP, int *areaP, float tol, int stop_if_div)
+	__global__ void clean(float *resP, float *kerP, float *mdlP, int *areaP, int stop_if_div)
 	{
 		const int dim = %(DIM)s;
 		const int maxiter = %(MAXITER)s;
 		const double gain = %(GAIN)s;
+		const double tol = %(TOL)s;
 		const int index = blockDim.x * blockIdx.x + threadIdx.x;
 
 		float *res = resP + index * %(DIM)s;
@@ -146,9 +229,6 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
         q = 1/q;
         // The clean loop
         for (int i=0; i < maxiter; i++) {
-
-        	printf("MY CLEAN ITER NUMBER: %%d\\n", i);
-
             nscore = 0;
             mmax = -1;
             step =  gain * max * q;
@@ -168,11 +248,14 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
             }
             nscore = sqrt(nscore / dim);
             if (firstscore < 0) firstscore = nscore;
-            printf("'SCORE' is: %%f\\n", nscore/firstscore );
-            printf("score vs nscore: %%f vs %%f \\n", score, nscore);
-            if (score > 0 && nscore > score) {
-            	printf("OUTER LOOP AT ITER NUMBER: %%d\\n", i);
 
+			//printf("MY CLEAN Iter %%d: Max=(%%d), Score = %%f, Prev = %%f\\n", \
+            //        i, nargmax, (double) (nscore/firstscore), \
+			//		(double) (score/firstscore));
+			//printf("tol: %%f\\n", tol);
+
+
+            if (score > 0 && nscore > score) {
                 if (stop_if_div) {
                     // We've diverged: undo last step and give up
                     *(mdl + argmax) -= step;
@@ -192,11 +275,10 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
                     best_score = score;
                     i = 0;  // Reset maxiter counter
                 }
-            printf("will the if statement work? score is: %%f, (score - nscore) / firstscore is: %%f\\n", score, (score - nscore) / firstscore);
             } else if (score > 0 && (score - nscore) / firstscore < tol) {
                 // We're done
                 return;
-            } else if (not stop_if_div && (best_score < 0 || nscore < best_score)) {
+            } else if (!stop_if_div && (best_score < 0 || nscore < best_score)) {
                 i = 0;  // Reset maxiter counter
             }
             score = nscore;
@@ -216,6 +298,7 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 		'DIM': dim,
 		'MAXITER': maxiter,
 		'GAIN': gain,
+		'TOL': tol,
 	}
 	mod = SourceModule(code)
 	clean = mod.get_function("clean")
@@ -235,8 +318,8 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 	cuda.memcpy_htod(mdl_gpu, mdl_pin)
 	cuda.memcpy_htod(area_gpu, area_pin)
 
-	clean.prepare("PPPPdi")
-	clean.prepared_call(grid, block, res_gpu, ker_gpu, mdl_gpu, area_gpu, tol, stop_if_div)
+	clean.prepare("PPPPi")
+	clean.prepared_call(grid, block, res_gpu, ker_gpu, mdl_gpu, area_gpu, stop_if_div)
 
 	cuda.memcpy_dtoh(res_pin, res_gpu)
 	cuda.memcpy_dtoh(mdl_pin, mdl_gpu)

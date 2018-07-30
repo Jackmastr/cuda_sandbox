@@ -35,14 +35,14 @@ ker1 = np.ones(1024)
 A = set()
 while len(A) < 160:
 	A.add(random.randint(0, 1024))
-for i in xrange(len(ker)):
+for i in xrange(len(ker0)):
 	if i in A:
 		ker0[i] = 0
 
 A = set()
 while len(A) < 160:
 	A.add(random.randint(0, 1024))
-for i in xrange(len(ker)):
+for i in xrange(len(ker1)):
 	if i in A:
 		ker1[i] = 0
 
