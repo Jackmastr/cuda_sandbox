@@ -12,45 +12,74 @@ from math import sqrt, ceil
 def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop_if_div=True, verbose=False):
 	#s = cuda.Event()
 	#e = cuda.Event()
-	oneImg = False
+	isComplex = (res.dtype == np.complex64)
 
+	res = np.array(res)
+	ker = np.array(ker)
+	if mdl is not None:
+		mdl = np.array(mdl)
+	if area is not None:
+		area = np.array(area)
+
+	oneImg = (res.ndim == 1)
 	gain = np.float64(gain)
 	maxiter = np.int32(maxiter)
 	tol = np.float64(tol)
 	stop_if_div = np.int32(stop_if_div)
 
-	
+	# if isComplex:
+	# 	if oneImg:
+	# 		dim = len(res)
+	# 		res = np.array([np.array([[np.real(r), np.imag(r)] for r in res], dtype=np.float32).flatten()])
+	# 		ker = np.array([np.array([[np.real(k), np.imag(k)] for k in ker], dtype=np.float32).flatten()])
+
+	# 		if mdl is None:
+	# 			mdl = np.array([np.zeros(2*dim, dtype=np.float32)], dtype=np.float32)
+	# 		else:
+	# 			res[0]
 
 
-
-	res = np.array(res, dtype=np.float32)
-	if res.ndim == 1:
-		oneImg = True
+	if oneImg:
+		dim = len(res)
 		res = np.array([res], dtype=np.float32)
-
-	ker = np.array(ker, dtype=np.float32)
-	if ker.ndim == 1:
 		ker = np.array([ker], dtype=np.float32)
 
-	dim = np.int32(len(res[0]))
+		if mdl is None:
+			mdl = np.array([np.zeros(dim, dtype=np.float32)], dtype=np.float32)
+		else:
+			res[0] = res[0] - np.fft.ifft(np.fft.fft(mdl) * np.fft.fft(ker[0])).astype(np.float32)
+			mdl = np.array([mdl], dtype=np.float32)
 
-	if mdl is None:
-		mdl = np.array([np.zeros(dim)]*len(ker), dtype=np.float32)
+		if area is None:
+			area = np.array([np.ones(dim, dtype=np.int32)], dtype=np.int32)
+		else:
+			area = np.array([area], dtype=np.int32)
+
 	else:
-		mdl = np.array(mdl, dtype=np.float32)
+		dim = len(res[0])
+		numImgs = len(res)
+		res = np.array(res, dtype=np.float32)
 
-		res = np.array([res[i] - np.fft.ifft(np.fft.fft(mdl) * np.fft.fft(ker[i])).astype(res[i].dtype) for i in xrange(len(ker))])
+		if ker.ndim == 1:
+			ker = np.array([ker]*numImgs, dtype=np.float32)
+		else:
+			ker = np.array(ker, dtype=np.float32)
 
-	if mdl.ndim == 1:
-		mdl = np.array([mdl], dtype=np.float32)
-	
-	if area is None:
-		area = np.array([np.ones(dim)]*len(ker), dtype=np.int32)
-	else:
-		area = np.array(area, dtype=np.int32)
+		if mdl is None:
+			mdl = np.array([np.zeros(dim, dtype=np.float32)]*numImgs, dtype=np.float32)
+		elif mdl.ndim == 1:
+			res = np.array([res[i] - np.fft.ifft(np.fft.fft(mdl) * np.fft.fft(ker[i])).astype(np.float32) for i in xrange(numImgs)])
+			mdl = np.array([mdl]*numImgs, dtype=np.float32)
+		else:
+			res = np.array([res[i] - np.fft.ifft(np.fft.fft(mdl[i]) * np.fft.fft(ker[i])).astype(np.float32) for i in xrange(numImgs)])
+			mdl = np.array(mdl, dtype=np.float32)
 
-	if area.ndim == 1:
-		area = np.array([area], dtype=np.int32)
+		if area is None:
+			area = np.array([np.ones(dim, dtype=np.int32)]*numImgs, dtype=np.int32)
+		elif area.ndim == 1:
+			area = np.array([area]*numImgs, dtype=np.int32)
+		else:
+			area = np.array(area, dtype=np.int32)
 
 	blockDimX = min(1024, len(ker))
 	block = (blockDimX, 1, 1)
@@ -68,7 +97,7 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 	#include <stdio.h>
 	#include <cmath>
 	
-	__global__ void cleanComplex(float *res, float *ker, float *mdl, float* area, int stop_if_div)
+	__global__ void cleanComplex(float *res, float *ker, float *mdl, int* area, int stop_if_div)
 	{
 		const int dim = %(DIM)s;
 		const int maxiter = %(MAXITER)s;
@@ -252,8 +281,6 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 			//printf("MY CLEAN Iter %%d: Max=(%%d), Score = %%f, Prev = %%f\\n", \
             //        i, nargmax, (double) (nscore/firstscore), \
 			//		(double) (score/firstscore));
-			//printf("tol: %%f\\n", tol);
-
 
             if (score > 0 && nscore > score) {
                 if (stop_if_div) {

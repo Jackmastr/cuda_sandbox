@@ -7,7 +7,7 @@ import numpy as np
 import scipy.signal as sps
 
 
-def MedianFilter(input=None, kernel_size=3, bw=32, bh=32):
+def MedianFilter(input=None, kernel_size=3, bw=16, bh=16):
 
 	#s = cuda.Event()
 	#e = cuda.Event()

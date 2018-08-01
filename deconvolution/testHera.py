@@ -31,7 +31,7 @@ class TestHera(unittest.TestCase):
 			if i in A:
 				ker[i] = 0
 		
-		ker = np.array(ker, dtype=np.float32)
+		ker = np.array(np.fft.fft(ker), dtype=np.float32)
 
 		A0 = deconv.clean(img0, ker, stop_if_div=False, tol=0)[0]
 		A1 = deconv.clean(img1, ker, stop_if_div=False, tol=0)[0]

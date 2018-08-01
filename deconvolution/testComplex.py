@@ -30,7 +30,7 @@ for i in xrange(len(ker)):
 	if i in A:
 		ker[i] = 0
 
-ker = np.array(ker, dtype=np.float32)
+ker = np.array(np.fft.fft(ker), dtype=np.complex64)
 
 class TestComplex(unittest.TestCase):
 	def test_complex(self):
