@@ -32,15 +32,76 @@ for i in xrange(len(ker)):
 
 ker = np.array(np.fft.fft(ker), dtype=np.complex64)
 
+area = np.ones(1024)
+area0 = area.copy()
+area1 = area.copy()
+area2 = area.copy()
+
+for i in xrange(len(area)):
+	if i in A:
+		area1[i] = 0
+
 class TestComplex(unittest.TestCase):
-	def test_complex(self):
-		A0 = deconv.clean(img0, ker, stop_if_div=False, tol=0.1, verbose=False)[0]
-		A1 = deconv.clean(img1, ker, stop_if_div=False, tol=1e-6)[0]
+	def test_tolerances(self):
+		A0 = deconv.clean(img0, ker, stop_if_div=False, tol=0.01, verbose=True)[0]
+		A1 = deconv.clean(img1, ker, stop_if_div=True, tol=1e-6)[0]
 		A2 = deconv.clean(img2, ker, stop_if_div=False, tol=1e-9)[0]
 
-		B0 = clean(img0, ker, stop_if_div=False, tol=0.1)[0]
+		B0 = clean(img0, ker, stop_if_div=False, tol=0.01)[0]
 		B1 = clean(img1, ker, stop_if_div=False, tol=1e-6)[0]
 		B2 = clean([img2]*3, [ker]*3, stop_if_div=False, tol=1e-9)[0][1]
+		for i in xrange(1024):
+			self.assertAlmostEqual(A0[i], B0[i], places=9)
+
+		for i in xrange(1024):
+			self.assertAlmostEqual(A1[i], B1[i], places=5)
+
+		for i in xrange(1024):
+			self.assertAlmostEqual(A2[i], B2[i], places=5)
+
+	def test_areas(self):
+		A0 = deconv.clean(img0, ker, stop_if_div=False, tol=0, area=area0)[0]
+		A1 = deconv.clean(img1, ker, stop_if_div=False, tol=0, area=area1)[0]
+		A2 = deconv.clean(img2, ker, stop_if_div=False, tol=0, area=area1)[0]
+
+		B0 = clean(img0, ker, stop_if_div=False, tol=0, area=area0)[0]
+		B1 = clean(img1, ker, stop_if_div=False, tol=0, area=area1)[0]
+		B2 = clean([img2]*3, [ker]*3, stop_if_div=False, tol=0, area=area1)[0][1]
+		for i in xrange(1024):
+			self.assertEqual(A0[i], B0[i])
+
+		for i in xrange(1024):
+			self.assertEqual(A1[i], B1[i])
+
+		for i in xrange(1024):
+			self.assertEqual(A2[i], B2[i])
+
+	def test_mdls(self):
+		A0 = deconv.clean(img0, ker, stop_if_div=False, tol=0.1, mdl=np.array(area0, dtype=np.float32), verbose=False)[0]
+		A1 = deconv.clean(img1, ker, stop_if_div=False, tol=1e-6, mdl=np.array(area1, dtype=np.float32), verbose=False)[0]
+		A2 = deconv.clean(img2, ker, stop_if_div=False, tol=1e-9, mdl=np.array(area2, dtype=np.float32), verbose=False)[0]
+
+		B0 = clean(img0, ker, stop_if_div=False, tol=0.1, mdl=area0)[0]
+		B1 = clean(img1, ker, stop_if_div=False, tol=1e-6, mdl=np.array(area1, dtype=np.float32))[0]
+		B2 = clean([img2]*3, [ker]*3, stop_if_div=False, tol=1e-9, mdl=[np.array(area2, dtype=np.float32)]*3)[0][1]
+		for i in xrange(1024):
+			self.assertAlmostEqual(A0[i], B0[i], places=7)
+
+		for i in xrange(1024):
+			self.assertAlmostEqual(A1[i], B1[i], places=7)
+
+		for i in xrange(1024):
+			self.assertAlmostEqual(A2[i], B2[i], places=7)
+
+	def test_stop_if_div(self):
+		A0 = deconv.clean(img0, ker, stop_if_div=True, tol=0.1)[0]
+		A1 = deconv.clean(img1, ker, stop_if_div=True, tol=1e-6)[0]
+		A2 = deconv.clean(img2, ker, stop_if_div=True, tol=1e-9)[0]
+
+		B0 = clean(img0, ker, stop_if_div=True, tol=0.1)[0]
+		B1 = clean(img1, ker, stop_if_div=True, tol=1e-6)[0]
+		B2 = clean([img2]*3, [ker]*3, stop_if_div=True, tol=1e-9)[0][1]
+
 		for i in xrange(1024):
 			self.assertAlmostEqual(A0[i], B0[i], places=5)
 
@@ -49,6 +110,24 @@ class TestComplex(unittest.TestCase):
 
 		for i in xrange(1024):
 			self.assertAlmostEqual(A2[i], B2[i], places=5)
+
+	def test_gains(self):
+		A0 = deconv.clean(img0, ker, stop_if_div=False, tol=0.1, gain=0.01)[0]
+		A1 = deconv.clean(img1, ker, stop_if_div=False, tol=1e-6, gain=0.001)[0]
+		A2 = deconv.clean(img2, ker, stop_if_div=False, tol=1e-9, gain=0.3)[0]
+
+		B0 = clean(img0, ker, stop_if_div=False, tol=0.1, gain=0.01)[0]
+		B1 = clean(img1, ker, stop_if_div=False, tol=1e-6, gain=0.001)[0]
+		B2 = clean([img2]*3, [ker]*3, stop_if_div=False, tol=1e-9, gain=0.3)[0][1]
+
+		for i in xrange(1024):
+			self.assertAlmostEqual(A0[i], B0[i], places=7)
+
+		for i in xrange(1024):
+			self.assertAlmostEqual(A1[i], B1[i], places=7)
+
+		for i in xrange(1024):
+			self.assertAlmostEqual(A2[i], B2[i], places=7)
 
 
 

@@ -12,11 +12,6 @@ from math import sqrt, ceil
 def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop_if_div=True, verbose=False):
 	#s = cuda.Event()
 	#e = cuda.Event()
-	isComplex = (res.dtype == np.complex64)
-
-	imgType = np.float32
-	if isComplex:
-		imgType = np.complex64
 
 	res = np.array(res)
 	ker = np.array(ker)
@@ -24,6 +19,9 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 		mdl = np.array(mdl)
 	if area is not None:
 		area = np.array(area)
+
+	isComplex = (res.dtype == np.complex64)
+	imgType = res.dtype
 
 	oneImg = (res.ndim == 1)
 	gain = np.float64(gain)
@@ -35,14 +33,14 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 
 	if oneImg:
 		dim = len(res)
-		res = np.array([res], dtype=np.float32)
-		ker = np.array([ker], dtype=np.float32)
+		res = np.array([res], dtype=imgType)
+		ker = np.array([ker], dtype=imgType)
 
 		if mdl is None:
-			mdl = np.array([np.zeros(dim, dtype=np.float32)], dtype=np.float32)
+			mdl = np.array([np.zeros(dim, dtype=imgType)], dtype=imgType)
 		else:
-			res[0] = res[0] - np.fft.ifft(np.fft.fft(mdl) * np.fft.fft(ker[0])).astype(np.float32)
-			mdl = np.array([mdl], dtype=np.float32)
+			res[0] = res[0] - np.fft.ifft(np.fft.fft(mdl) * np.fft.fft(ker[0])).astype(imgType)
+			mdl = np.array([mdl], dtype=imgType)
 
 		if area is None:
 			area = np.array([np.ones(dim, dtype=np.int32)], dtype=np.int32)
@@ -52,21 +50,21 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 	else:
 		dim = len(res[0])
 		numImgs = len(res)
-		res = np.array(res, dtype=np.float32)
+		res = np.array(res, dtype=imgType)
 
 		if ker.ndim == 1:
-			ker = np.array([ker]*numImgs, dtype=np.float32)
+			ker = np.array([ker]*numImgs, dtype=imgType)
 		else:
-			ker = np.array(ker, dtype=np.float32)
+			ker = np.array(ker, dtype=imgType)
 
 		if mdl is None:
-			mdl = np.array([np.zeros(dim, dtype=np.float32)]*numImgs, dtype=np.float32)
+			mdl = np.array([np.zeros(dim, dtype=imgType)]*numImgs, dtype=imgType)
 		elif mdl.ndim == 1:
-			res = np.array([res[i] - np.fft.ifft(np.fft.fft(mdl) * np.fft.fft(ker[i])).astype(np.float32) for i in xrange(numImgs)])
-			mdl = np.array([mdl]*numImgs, dtype=np.float32)
+			res = np.array([res[i] - np.fft.ifft(np.fft.fft(mdl) * np.fft.fft(ker[i])).astype(imgType) for i in xrange(numImgs)])
+			mdl = np.array([mdl]*numImgs, dtype=imgType)
 		else:
-			res = np.array([res[i] - np.fft.ifft(np.fft.fft(mdl[i]) * np.fft.fft(ker[i])).astype(np.float32) for i in xrange(numImgs)])
-			mdl = np.array(mdl, dtype=np.float32)
+			res = np.array([res[i] - np.fft.ifft(np.fft.fft(mdl[i]) * np.fft.fft(ker[i])).astype(imgType) for i in xrange(numImgs)])
+			mdl = np.array(mdl, dtype=imgType)
 
 		if area is None:
 			area = np.array([np.ones(dim, dtype=np.int32)]*numImgs, dtype=np.int32)
@@ -91,7 +89,7 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 	#include <stdio.h>
 	#include <cmath>
 	
-	__global__ void cleanComplex(float *res, float *ker, float *mdl, int* area, int stop_if_div)
+	__global__ void clean(cuFloatComplex *resP, cuFloatComplex *kerP, cuFloatComplex *mdlP, int* areaP, int stop_if_div)
 	{
 		const int dim = %(DIM)s;
 		const int maxiter = %(MAXITER)s;
@@ -100,8 +98,8 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 		const int index = blockDim.x * blockIdx.x + threadIdx.x;
 
 		cuFloatComplex *res = resP + index * %(DIM)s;
-		cufloatComplex *ker = kerP + index * %(DIM)s;
-		cufloatComplex *mdl = mdlP + index * %(DIM)s;
+		cuFloatComplex *ker = kerP + index * %(DIM)s;
+		cuFloatComplex *mdl = mdlP + index * %(DIM)s;
 		int *area = areaP + index * %(DIM)s;
 
 
@@ -120,8 +118,8 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 		// Compute gain/phase of kernel
 		for (int n = 0; n < %(DIM)s; n++)
 		{
-			valr = cuCReal(ker[n]);
-			vali = cuCImag(ker[n]);
+			valr = cuCrealf(ker[n]);
+			vali = cuCimagf(ker[n]);
 			mval = valr * valr + vali * vali;
 			if (mval > mq && area[n])
 			{
@@ -133,7 +131,7 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 		qr /= mq;
 		qi /= -mq;
 		// The clean loop
-		for (int i = 0; i < %(MAXITER)s; i++)
+		for (int i = 0; i < maxiter; i++)
 		{
 			nscore = 0;
 			mmax = -1;
@@ -141,24 +139,22 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 			stepi = (float) gain * (maxr * qi + maxi * qr);
 
 			stepComplex = make_cuFloatComplex(stepr, stepi);
-			stepComplexConj = cuConj(stepComplex);
-			stepComplexConjTimesJ = cuCmul(stepComplexConj, make_cuFloatComplex(0, 1));
 
-			mdl[argmax] = cuCadd(mdl[argmax], stepComplex);
+			mdl[argmax] = cuCaddf(mdl[argmax], stepComplex);
 
 			// Take next step and compute score
 			for (int n = 0; n < %(DIM)s; n++)
 			{
 				wrap_n = (n + argmax) %% dim;
 
-				float kr = cuCReal(ker[n]), ki = cuCImag(ker[n]);
-				realSub = kr * stepr - ki * stepi;
-				imagSub = kr * stepi + ki * stepr;
-				res[wrap_n] = cuCsub(res[wrap_n], make_cuFloatComplex(realSub, imagSub));
+				float kr = cuCrealf(ker[n]), ki = cuCimagf(ker[n]);
+				float realSub = kr * stepr - ki * stepi;
+				float imagSub = kr * stepi + ki * stepr;
+				res[wrap_n] = cuCsubf(res[wrap_n], make_cuFloatComplex(realSub, imagSub));
 
 
-				valr = cuCReal(res[wrap_n]);
-				vali = cuCImag(res[wrap_n]);
+				valr = cuCrealf(res[wrap_n]);
+				vali = cuCimagf(res[wrap_n]);
 				mval = valr * valr + vali * vali;
 				nscore += mval;
 				if (mval > mmax && area[wrap_n])
@@ -176,16 +172,16 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 				if (stop_if_div)
 				{
 					// We've diverged: undo last step and give up
-					mdl[argmax] = cuCsub(mdl[argmax], stepComplex);
+					mdl[argmax] = cuCsubf(mdl[argmax], stepComplex);
 
 					for (int n=0; n < dim; n++)
 					{
 						wrap_n = (n + argmax) %% dim;
 
-						float kr = cuCReal(ker[n]), ki = cuCImag(ker[n]);
-						realAdd = kr * stepr - ki * stepi;
-						imagAdd = kr * stepi + ki * stepr;
-						res[wrap_n] = cuCadd(res[wrap_n], make_cuFloatComplex(realAdd, imagAdd));
+						float kr = cuCrealf(ker[n]), ki = cuCimagf(ker[n]);
+						float realAdd = kr * stepr - ki * stepi;
+						float imagAdd = kr * stepi + ki * stepr;
+						res[wrap_n] = cuCaddf(res[wrap_n], make_cuFloatComplex(realAdd, imagAdd));
 					}
 					return;
 				} else if (best_score < 0 || score < best_score)
@@ -196,12 +192,12 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 						wrap_n = (n + argmax) %% dim;
 						best_mdl[n] = mdl[n];
 
-						float kr = cuCReal(ker[n]), ki = cuCImag(ker[n]);
-						realAdd = kr * stepr - ki * stepi;
-						imagAdd = kr * stepi + ki * stepr;
-						best_res[wrap_n] = cuCadd(res[wrap_n], make_cuFloatComplex(realAdd, imagAdd));
+						float kr = cuCrealf(ker[n]), ki = cuCimagf(ker[n]);
+						float realAdd = kr * stepr - ki * stepi;
+						float imagAdd = kr * stepi + ki * stepr;
+						best_res[wrap_n] = cuCaddf(res[wrap_n], make_cuFloatComplex(realAdd, imagAdd));
 					}
-					best_mdl[argmax] = cuCSub(best_mdl[argmax], stepComplex);
+					best_mdl[argmax] = cuCsubf(best_mdl[argmax], stepComplex);
 
 					best_score = score;
 					i = 0; // Reset maxiter counter
@@ -226,13 +222,12 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 				res[n] = best_res[n];
 			}
 		}
+	}
 	"""
 	
 	
 	code = """
 	#pragma comment(linker, "/HEAP:40000000")
-
-	#include <cuComplex.h>
 	#include <stdio.h>
 	#include <cmath>
 
@@ -337,7 +332,18 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 		'GAIN': gain,
 		'TOL': tol,
 	}
-	mod = SourceModule(code)
+	code_complex = code_complex % {
+		'DIM': dim,
+		'MAXITER': maxiter,
+		'GAIN': gain,
+		'TOL': tol,
+	}
+
+	if isComplex:
+		mod = SourceModule(code_complex)
+	else:
+		mod = SourceModule(code)
+	
 	clean = mod.get_function("clean")
 
 	res_pin = cuda.register_host_memory(res)
