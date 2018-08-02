@@ -33,22 +33,22 @@ class TestHera(unittest.TestCase):
 		
 		ker = np.array(np.fft.fft(ker), dtype=np.float32)
 
-		A0 = deconv.clean(img0, ker, stop_if_div=False, tol=0)[0]
-		A1 = deconv.clean(img1, ker, stop_if_div=False, tol=0)[0]
-		A2 = deconv.clean(img2, ker, stop_if_div=False, tol=0)[0]
+		A0, info = deconv.clean(img0, ker, stop_if_div=True, tol=0, verbose=True)
+		# A1 = deconv.clean(img1, ker, stop_if_div=True, tol=0)[0]
+		# A2 = deconv.clean(img2, ker, stop_if_div=True, tol=0)[0]
 
-		B0 = clean(img0, ker, stop_if_div=False, tol=0)[0]
-		B1 = clean(img1, ker, stop_if_div=False, tol=0)[0]
-		B2 = clean([img2]*3, [ker]*3, stop_if_div=False, tol=0)[0][1]
+		B0 = clean(img0, ker, stop_if_div=True, tol=0)[0]
+		# B1 = clean(img1, ker, stop_if_div=True, tol=0)[0]
+		# B2 = clean([img2]*3, [ker]*3, stop_if_div=False, tol=0)[0][1]
 
 		for i in xrange(1024):
 			self.assertEqual(A0[i], B0[i])
 
-		for i in xrange(1024):
-			self.assertEqual(A1[i], B1[i])
+		# for i in xrange(1024):
+		# 	self.assertEqual(A1[i], B1[i])
 
-		for i in xrange(1024):
-			self.assertEqual(A2[i], B2[i])
+		# for i in xrange(1024):
+		# 	self.assertEqual(A2[i], B2[i])
 
 
 	def test_spike(self):
@@ -67,7 +67,7 @@ class TestHera(unittest.TestCase):
 		ker = np.zeros(1024, dtype=np.float32)
 		ker[0] = 1
 		img = ker.copy()
-		A, info = deconv.clean(img, ker, stop_if_div=True, tol=0, maxiter=int(1e4))
+		A, info = deconv.clean(img, ker, stop_if_div=True, tol=0, maxiter=int(1e4), verbose=True)
 
 		B = clean([img]*10, [ker]*10, stop_if_div=True, tol=0, maxiter=int(1e4))[0]
 

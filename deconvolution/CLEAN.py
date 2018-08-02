@@ -233,6 +233,7 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 
 	__global__ void clean(float *resP, float *kerP, float *mdlP, int *areaP, int stop_if_div)
 	{
+
 		const int dim = %(DIM)s;
 		const int maxiter = %(MAXITER)s;
 		const double gain = %(GAIN)s;
@@ -253,9 +254,9 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 
         // Compute gain/phase of kernel
         for (int n=0; n < dim; n++) {
-            val = *(ker + n);
+            val = ker[n];
             mval = val * val;
-            if (mval > mq && *(area + n)) {
+            if (mval > mq && area[n]) {
                 mq = mval;
                 q = val;
             }
@@ -265,16 +266,16 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
         for (int i=0; i < maxiter; i++) {
             nscore = 0;
             mmax = -1;
-            step =  gain * max * q;
-            *(mdl + argmax) += step;
+            step = (float) gain * max * q;
+            mdl[argmax] += step;
             // Take next step and compute score
             for (int n=0; n < dim; n++) {
                 wrap_n = (n + argmax) %% dim;
-                *(res + wrap_n) -= *(ker + n) * step;
-                val = *(res + wrap_n);
+                res[wrap_n] -= ker[n] * step;
+                val = res[wrap_n];
                 mval = val * val;
                 nscore += mval;
-                if (mval > mmax && *(area + wrap_n)) {
+                if (mval > mmax && area[wrap_n]) {
                     nargmax = wrap_n;
                     max = val;
                     mmax = mval;
@@ -283,25 +284,28 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
             nscore = sqrt(nscore / dim);
             if (firstscore < 0) firstscore = nscore;
 
-			//printf("MY CLEAN Iter %%d: Max=(%%d), Score = %%f, Prev = %%f\\n", \
-            //        i, nargmax, (double) (nscore/firstscore), \
-			//		(double) (score/firstscore));
+            if (i < 10000)
+            {
+			printf("MY CLEAN Iter %%d: Max=(%%d), Score = %%f, Prev = %%f\\n", \
+                    i, nargmax, (double) (nscore/firstscore), \
+					(double) (score/firstscore));
+			}
 
             if (score > 0 && nscore > score) {
                 if (stop_if_div) {
                     // We've diverged: undo last step and give up
-                    *(mdl + argmax) -= step;
+                    mdl[argmax] -= step;
                     for (int n=0; n < dim; n++) {
                         wrap_n = (n + argmax) %% dim;
-                        *(res + wrap_n) += *(ker + n) * step;
+                        res[wrap_n] += ker[n] * step;
                     }
                     return;
                 } else if (best_score < 0 || score < best_score) {
                     // We've diverged: buf prev score in case it's global best
                     for (int n=0; n < dim; n++) {
                         wrap_n = (n + argmax) %% dim;
-                        best_mdl[n] = *(mdl + n);
-                        best_res[wrap_n] = *(res + wrap_n) + *(ker + n) * step;
+                        best_mdl[n] = mdl[n];
+                        best_res[wrap_n] = res[wrap_n] + ker[n] * step;
                     }
                     best_mdl[argmax] -= step;
                     best_score = score;
@@ -319,8 +323,8 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
         // If we end on maxiter, then make sure mdl/res reflect best score
         if (best_score > 0 && best_score < nscore) {
             for (int n=0; n < dim; n++) {
-                *(mdl + n) = best_mdl[n];
-                *(res + n) = best_res[n];
+                mdl[n] = best_mdl[n];
+                res[n] = best_res[n];
            }
         }
 	}
