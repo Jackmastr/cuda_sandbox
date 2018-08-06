@@ -43,7 +43,7 @@ for i in xrange(len(area)):
 class TestOtherSettings(unittest.TestCase):
 	def test_tolerances(self):
 		A0 = deconv.clean(img0, ker, stop_if_div=False, tol=0.01, verbose=False)[0]
-		A1 = deconv.clean(img1, ker, stop_if_div=True, tol=1e-6)[0]
+		A1 = deconv.clean(img1, ker, stop_if_div=False, tol=1e-6)[0]
 		A2 = deconv.clean(img2, ker, stop_if_div=False, tol=1e-9)[0]
 
 		B0 = clean(img0, ker, stop_if_div=False, tol=0.01)[0]

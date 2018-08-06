@@ -5,7 +5,8 @@ from pycuda.compiler import SourceModule
 import numpy as np 
 import unittest
 from aipy import deconv
-
+import warnings
+warnings.filterwarnings("ignore")
 class TestCleanSimple(unittest.TestCase):
 	def test_ZeroGain(self):
 		dim = 128
@@ -25,15 +26,18 @@ class TestCleanSimple(unittest.TestCase):
 
 
 		for i in xrange(12):
-			self.assertAlmostEqual(deconv.clean(img, ker)[0][i], clean(img, ker)[0][i], places=6)
+			self.assertEqual(deconv.clean(img, ker)[0][i], clean(img, ker)[0][i])
 
 	def test_RandomInput(self):
 		dim = 25
-		img = np.random.rand(dim)
-		ker = np.random.rand(dim)
+		img = np.array(np.random.rand(dim), dtype=np.float32)
+		ker = np.array(np.random.rand(dim), dtype=np.float32)
+
+		A = deconv.clean(img, ker)[0]
+		B = clean(img, ker)[0]
 
 		for i in xrange(dim):
-			self.assertAlmostEqual(deconv.clean(img, ker)[0][i], clean(img, ker)[0][i], places=6)
+			self.assertEqual(A[i], B[i])
 
 
 
