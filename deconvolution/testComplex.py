@@ -77,7 +77,7 @@ class TestComplex(unittest.TestCase):
 			self.assertEqual(A2[i], B2[i])
 
 	def test_mdls(self):
-		A0 = deconv.clean(img0, ker, stop_if_div=False, tol=0.1, mdl=np.array(area0, dtype=np.float32), verbose=False)[0]
+		A0 = deconv.clean(img0, ker, stop_if_div=False, tol=0.1, mdl=area0, verbose=False, pos_def=0)[0]
 		A1 = deconv.clean(img1, ker, stop_if_div=False, tol=1e-6, mdl=np.array(area1, dtype=np.float32), verbose=False)[0]
 		A2 = deconv.clean(img2, ker, stop_if_div=False, tol=1e-9, mdl=np.array(area2, dtype=np.float32), verbose=False)[0]
 

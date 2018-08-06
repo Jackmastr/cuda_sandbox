@@ -7,7 +7,7 @@ import numpy as np
 import scipy.signal as sps
 
 
-def MedianFilter(input=None, kernel_size=3, bw=16, bh=16):
+def MedianFilter(input=None, kernel_size=3, bw=32, bh=32):
 
 	#s = cuda.Event()
 	#e = cuda.Event()
@@ -331,6 +331,7 @@ def MedianFilter(input=None, kernel_size=3, bw=16, bh=16):
 	in_gpu_list = [None]*nStreams
 	#out_gpu_list = [cuda.mem_alloc(pinnedImg.nbytes) for pinnedImg in in_pin_list]
 	out_gpu_list = [None]*nStreams
+	mf.prepare("PPii")
 	for i in xrange(nStreams + 2):
 		ii = i - 1
 		iii = i - 2
@@ -346,16 +347,15 @@ def MedianFilter(input=None, kernel_size=3, bw=16, bh=16):
 			# mf_shared.prepare("Pii")
 			# mf_shared.prepared_async_call(grid, block, st, out_gpu_list[ii], expanded_M, expanded_N)
 
-			mf.prepare("PPii")
+			#mf.prepare("PPii")
 			mf.prepared_async_call(grid, block, st, in_gpu_list[ii], out_gpu_list[ii], expanded_M, expanded_N)
-
 			# e.record(stream=stream[0])
 			# e.synchronize()
 			# print s.time_till(e), "ms for the kernel"
 
 		if 0 <= i < nStreams:
 			st = stream[i]
-			# cuda.matrix_to_texref(in_pin_list[i], texref, order="C")
+			#cuda.matrix_to_texref(in_pin_list[i], texref, order="C")
 			in_gpu_list[i] = cuda.mem_alloc(imgBytes)
 			cuda.memcpy_htod_async(in_gpu_list[i], in_pin_list[i], stream=st)
 

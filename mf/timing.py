@@ -13,59 +13,53 @@ inListBig = [np.random.rand(600, 1024) for i in xrange(100)]
 print "done making it"
 
 s.record()
-[sps.medfilt2d(elem, (11, 11)) for elem in inListBig[:10]]
+[sps.medfilt2d(elem, (11, 11)) for elem in inListBig]
 e.record()
 e.synchronize()
-print "SCIPY MEDFILT w/ 10 IMAGES: ", s.time_till(e), "ms"
+print "SCIPY MEDFILT w/ 100 IMAGES: ", s.time_till(e), "ms"
 
 # s.record()
-# [sps.medfilt2d(elem, (11, 11)) for elem in inListBig[10:20]]
+# [.record()
 # e.record()
 # e.synchronize()
 # print "SCIPY MEDFILT w/ 10 IMAGES: ", s.time_till(e), "ms"
 
 # s.record()
-# [sps.medfilt2d(elem, (11, 11)) for elem in inListBig[20:30]]
+# [sps.medfilt2d(elem, (17, 17)) for elem in inListBig[20:30]]
 # e.record()
 # e.synchronize()
 # print "SCIPY MEDFILT w/ 10 IMAGES: ", s.time_till(e), "ms"
 
 # s.record()
-# [sps.medfilt2d(elem, (11, 11)) for elem in inListBig[30:40]]
+# [sps.medfilt2d(elem, (17, 17)) for elem in inListBig[30:40]]
 # e.record()
 # e.synchronize()
 # print "SCIPY MEDFILT w/ 10 IMAGES: ", s.time_till(e), "ms"
 
-
-
+"""
 s.record()
-mf.MedianFilter(kernel_size=(17, 17), input=inListBig)
+mf.MedianFilter(kernel_size=17, input=inListBig)
 e.record()
 e.synchronize()
-print "32x32 MEDFILT w/ 100 IMAGES: ", s.time_till(e), "ms"
+print "32x32 no stream 17 MEDFILT w/ 100 IMAGES: ", s.time_till(e), "ms"
 
 s.record()
 mf.MedianFilter(kernel_size=17, input=inListBig)
 e.record()
 e.synchronize()
-print "32x32 MEDFILT w/ 100 IMAGES: ", s.time_till(e), "ms"
+print "32x32 no stream 17 MEDFILT w/ 100 IMAGES: ", s.time_till(e), "ms"
 
-# # s.record()
-# # [sps.medfilt2d(elem, (17, 17)) for elem in inListBig]
-# # e.record()
-# # e.synchronize()
-# # print "SCIPY MEDFILT w/ 100 IMAGES: ", s.time_till(e), "ms"
+s.record()
+mf.MedianFilter(kernel_size=17, input=inListBig)
+e.record()
+e.synchronize()
+print "32x32 no stream 17 MEDFILT w/ 100 IMAGES: ", s.time_till(e), "ms"
 
-# s.record()
-# mf.MedianFilter(kernel_size=(17, 17), input=inListBig)
-# e.record()
-# e.synchronize()
-# print "THIS MEDFILT w/ 100 IMAGES: ", s.time_till(e), "ms"
+s.record()
+mf.MedianFilter(kernel_size=17, input=inListBig)
+e.record()
+e.synchronize()
+print "32x32 no stream 17 MEDFILT w/ 100 IMAGES: ", s.time_till(e), "ms"
 
-# #s.record()
-# #mf.MedianFilter(kernel_size=(17, 17), input=inListHuge)
-# #e.record()
-# #e.synchronize()
-# #print "THIS MEDFILT w/ 1000 IMAGES: ", s.time_till(e), "ms"
-
+"""
 

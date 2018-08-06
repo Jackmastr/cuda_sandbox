@@ -284,7 +284,7 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
             nscore = sqrt(nscore / dim);
             if (firstscore < 0) firstscore = nscore;
 
-            if (i < 10000)
+			if (i > 10000)
             {
 			printf("MY CLEAN Iter %%d: Max=(%%d), Score = %%f, Prev = %%f\\n", \
                     i, nargmax, (double) (nscore/firstscore), \
@@ -344,9 +344,9 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 	}
 
 	if isComplex:
-		mod = SourceModule(code_complex)
+		mod = SourceModule(code_complex, options=["-fmad=false"])
 	else:
-		mod = SourceModule(code)
+		mod = SourceModule(code, options=["-fmad=false"])
 	
 	clean = mod.get_function("clean")
 
