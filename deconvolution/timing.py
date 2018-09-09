@@ -32,27 +32,28 @@ ker = np.fft.fft(ker)
 ker = np.array(ker, dtype=data_type)
 
 
-numImgs = 61250
+numImgs = 10
 # numImgs = 4096
+print numImgs, data_type, "Images"
 
-# print "AIPY CLEAN"
+print "AIPY CLEAN"
 
-# s = cuda.Event()
-# e = cuda.Event()
-# s.record()
-# for i in xrange(numImgs):
-# 	deconv.clean(img1, ker, stop_if_div=False, tol=0)
-# e.record()
-# e.synchronize()
-# print s.time_till(e)/1000, "s"
+s = cuda.Event()
+e = cuda.Event()
+s.record()
+for i in xrange(numImgs):
+	deconv.clean(img1, ker, stop_if_div=False, tol=0)
+e.record()
+e.synchronize()
+print s.time_till(e)/1000, "s"
 
-# s = cuda.Event()
-# e = cuda.Event()
-# s.record()
-# deconv.clean(img1, ker, stop_if_div=False, tol=0)
-# e.record()
-# e.synchronize()
-# print s.time_till(e), "ms"
+s = cuda.Event()
+e = cuda.Event()
+s.record()
+deconv.clean(img2, ker, stop_if_div=False, tol=0)
+e.record()
+e.synchronize()
+print s.time_till(e)/1000, "s"
 
 # s = cuda.Event()
 # e = cuda.Event()
@@ -72,13 +73,13 @@ e.record()
 e.synchronize()
 print s.time_till(e)/1000, "s"
 
-# s = cuda.Event()
-# e = cuda.Event()
-# s.record()
-# clean([img1]*numImgs, [ker]*numImgs, stop_if_div=False, tol=0, maxiter=1000)
-# e.record()
-# e.synchronize()
-# print s.time_till(e)/1000, "s"
+s = cuda.Event()
+e = cuda.Event()
+s.record()
+clean([img2]*numImgs, [ker]*numImgs, stop_if_div=False, tol=0)
+e.record()
+e.synchronize()
+print s.time_till(e)/1000, "s"
 
 
 # ---REAL---

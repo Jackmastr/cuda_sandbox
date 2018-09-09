@@ -83,6 +83,133 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 
 	# make all the arguments 1 level deeper of a pointer, use thread index to choose which one at the very start, then continue through like normal
 
+	code_complex64 = """
+	#pragma comment(linker, "/HEAP:40000000")
+	#include <cuComplex.h>
+	#include <stdio.h>
+	#include <cmath>
+	
+	__global__ void clean(cuDoubleComplex *resP, cuDoubleComplex *kerP, cuDoubleComplex *mdlP, int* areaP, int stop_if_div)
+	{
+		const int dim = %(DIM)s;
+		const int maxiter = %(MAXITER)s;
+		const double gain = %(GAIN)s;
+		const double tol = %(TOL)s;
+		const int index = blockDim.x * blockIdx.x + threadIdx.x;
+		cuDoubleComplex *res = resP + index * %(DIM)s;
+		cuDoubleComplex *ker = kerP + index * %(DIM)s;
+		cuDoubleComplex *mdl = mdlP + index * %(DIM)s;
+		int *area = areaP + index * %(DIM)s;
+		double maxr=0, maxi=0, valr=0, vali, stepr, stepi, qr=0, qi=0;
+		double score=-1, nscore, best_score=-1;
+		double mmax, mval, mq=0;
+		double firstscore=-1;
+		int argmax=0, nargmax=0, wrap_n;
+		
+		cuDoubleComplex best_mdl[%(DIM)s];
+		cuDoubleComplex best_res[%(DIM)s];
+		cuDoubleComplex stepComplex;
+		
+		// Compute gain/phase of kernel
+		for (int n = 0; n < %(DIM)s; n++)
+		{
+			valr = cuCreal(ker[n]);
+			vali = cuCimag(ker[n]);
+			mval = valr * valr + vali * vali;
+			if (mval > mq && area[n])
+			{
+				mq = mval;
+				qr = valr;
+				qi = vali;
+			}
+		}
+		qr /= mq;
+		qi /= -mq;
+		// The clean loop
+		for (int i = 0; i < maxiter; i++)
+		{
+			nscore = 0;
+			mmax = -1;
+			stepr = (double) gain * (maxr * qr - maxi * qi);
+			stepi = (double) gain * (maxr * qi + maxi * qr);
+			stepComplex = make_cuDoubleComplex(stepr, stepi);
+			mdl[argmax] = cuCadd(mdl[argmax], stepComplex);
+			// Take next step and compute score
+			for (int n = 0; n < %(DIM)s; n++)
+			{
+				wrap_n = (n + argmax) %% dim;
+				double kr = cuCreal(ker[n]), ki = cuCimag(ker[n]);
+				double realSub = kr * stepr - ki * stepi;
+				double imagSub = kr * stepi + ki * stepr;
+				res[wrap_n] = cuCsub(res[wrap_n], make_cuDoubleComplex(realSub, imagSub));
+				valr = cuCreal(res[wrap_n]);
+				vali = cuCimag(res[wrap_n]);
+				mval = valr * valr + vali * vali;
+				nscore += mval;
+				if (mval > mmax && area[wrap_n])
+				{
+					nargmax = wrap_n;
+					maxr = valr;
+					maxi = vali;
+					mmax = mval;
+				}
+			}
+			nscore = sqrt(nscore/dim);
+			if (firstscore < 0) firstscore = nscore;
+			if (score > 0 && nscore > score)
+			{
+				if (stop_if_div)
+				{
+					// We've diverged: undo last step and give up
+					mdl[argmax] = cuCsub(mdl[argmax], stepComplex);
+					for (int n=0; n < dim; n++)
+					{
+						wrap_n = (n + argmax) %% dim;
+						double kr = cuCreal(ker[n]), ki = cuCimag(ker[n]);
+						double realAdd = kr * stepr - ki * stepi;
+						double imagAdd = kr * stepi + ki * stepr;
+						res[wrap_n] = cuCadd(res[wrap_n], make_cuDoubleComplex(realAdd, imagAdd));
+					}
+					return;
+				} else if (best_score < 0 || score < best_score)
+				{
+					// We've diverged: buf prev score in case it's global best
+					for (int n=0; n < dim; n++)
+					{
+						wrap_n = (n + argmax) %% dim;
+						best_mdl[n] = mdl[n];
+						double kr = cuCrealf(ker[n]), ki = cuCimag(ker[n]);
+						double realAdd = kr * stepr - ki * stepi;
+						double imagAdd = kr * stepi + ki * stepr;
+						best_res[wrap_n] = cuCadd(res[wrap_n], make_cuDoubleComplex(realAdd, imagAdd));
+					}
+					best_mdl[argmax] = cuCsubf(best_mdl[argmax], stepComplex);
+					best_score = score;
+					i = 0; // Reset maxiter counter
+				}
+			} else if (score > 0 && (score - nscore) / firstscore < tol)
+			{
+				// We're done
+				return;
+			} else if (not stop_if_div && (best_score < 0 || nscore < best_score))
+			{
+				i = 0; // Reset maxiter counter
+			}
+			score = nscore;
+			argmax = nargmax;
+		}
+		// If we end on maxiter, then make sure mdl/res reflect best score
+		if (best_score > 0 && best_score < nscore)
+		{
+			for (int n=0; n < dim; n++)
+			{
+				mdl[n] = best_mdl[n];
+				res[n] = best_res[n];
+			}
+		}
+	}
+	"""
+
 	code_complex = """
 	#pragma comment(linker, "/HEAP:40000000")
 	#include <cuComplex.h>
