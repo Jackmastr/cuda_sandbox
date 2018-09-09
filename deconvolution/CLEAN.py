@@ -22,6 +22,7 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 
 	isComplex = (res.dtype == np.complex64)
 	isCompelx128 = (res.dtype == np.complex128)
+	isRealDouble = (res.dtype == np.float64)
 	imgType = res.dtype
 
 	oneImg = (res.ndim == 1)
@@ -353,6 +354,102 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 	}
 	"""
 	
+	codeFloat64 = """
+	#pragma comment(linker, "/HEAP:40000000")
+	#include <stdio.h>
+	#include <cmath>
+	__global__ void clean(double *resP, double *kerP, double *mdlP, int *areaP, int stop_if_div)
+	{
+		const int dim = %(DIM)s;
+		const int maxiter = %(MAXITER)s;
+		const double gain = %(GAIN)s;
+		const double tol = %(TOL)s;
+		const int index = blockDim.x * blockIdx.x + threadIdx.x;
+		double *res = resP + index * %(DIM)s;
+		double *ker = kerP + index * %(DIM)s;
+		double *mdl = mdlP + index * %(DIM)s;
+		int *area = areaP + index * %(DIM)s;
+		double score=-1, nscore, best_score=-1;
+       	double max=0, mmax, val, mval, step, q=0, mq=0;
+        double firstscore=-1;
+        int argmax=0, nargmax=0, wrap_n;
+        double best_mdl[%(DIM)s], best_res[%(DIM)s];
+        // Compute gain/phase of kernel
+        for (int n=0; n < dim; n++) {
+            val = ker[n];
+            mval = val * val;
+            if (mval > mq && area[n]) {
+                mq = mval;
+                q = val;
+            }
+        }
+        q = 1/q;
+        // The clean loop
+        for (int i=0; i < maxiter; i++) {
+            nscore = 0;
+            mmax = -1;
+            step = (double) gain * max * q;
+            mdl[argmax] += step;
+            // Take next step and compute score
+            for (int n=0; n < dim; n++) {
+                wrap_n = (n + argmax) %% dim;
+                res[wrap_n] -= ker[n] * step;
+                val = res[wrap_n];
+                mval = val * val;
+                nscore += mval;
+                if (mval > mmax && area[wrap_n]) {
+                    nargmax = wrap_n;
+                    max = val;
+                    mmax = mval;
+                }
+            }
+            nscore = sqrt(nscore / dim);
+            if (firstscore < 0) firstscore = nscore;
+			if (i > 10000)
+            {
+			printf("MY CLEAN Iter %%d: Max=(%%d), Score = %%f, Prev = %%f\\n", \
+                    i, nargmax, (double) (nscore/firstscore), \
+					(double) (score/firstscore));
+			}
+            if (score > 0 && nscore > score) {
+                if (stop_if_div) {
+                    // We've diverged: undo last step and give up
+                    mdl[argmax] -= step;
+                    for (int n=0; n < dim; n++) {
+                        wrap_n = (n + argmax) %% dim;
+                        res[wrap_n] += ker[n] * step;
+                    }
+                    return;
+                } else if (best_score < 0 || score < best_score) {
+                    // We've diverged: buf prev score in case it's global best
+                    for (int n=0; n < dim; n++) {
+                        wrap_n = (n + argmax) %% dim;
+                        best_mdl[n] = mdl[n];
+                        best_res[wrap_n] = res[wrap_n] + ker[n] * step;
+                    }
+                    best_mdl[argmax] -= step;
+                    best_score = score;
+                    i = 0;  // Reset maxiter counter
+                }
+            } else if (score > 0 && (score - nscore) / firstscore < tol) {
+                // We're done
+                return;
+            } else if (!stop_if_div && (best_score < 0 || nscore < best_score)) {
+                i = 0;  // Reset maxiter counter
+            }
+            score = nscore;
+            argmax = nargmax;
+        }
+        // If we end on maxiter, then make sure mdl/res reflect best score
+        if (best_score > 0 && best_score < nscore) {
+            for (int n=0; n < dim; n++) {
+                mdl[n] = best_mdl[n];
+                res[n] = best_res[n];
+           }
+        }
+	}
+	
+	"""
 	
 	code = """
 	#pragma comment(linker, "/HEAP:40000000")
@@ -476,11 +573,19 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 		'GAIN': gain,
 		'TOL': tol,
 	}
+	codeFloat64 = codeFloat64 % {
+		'DIM': dim,
+		'MAXITER': maxiter,
+		'GAIN': gain,
+		'TOL': tol,
+	}
 
 	if isComplex:
 		mod = SourceModule(code_complex, options=["-fmad=false"])
 	elif isCompelx128:
 		mod = SourceModule(code_complex128, options=["-fmad=false"])
+	elif isRealDouble:
+		mod = SourceModule(codeFloat64, options=["-fmad=false"])
 	else:
 		mod = SourceModule(code, options=["-fmad=false"])
 	
