@@ -21,6 +21,7 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 		area = np.array(area)
 
 	isComplex = (res.dtype == np.complex64)
+	isCompelx128 = (res.dtype == np.complex128)
 	imgType = res.dtype
 
 	oneImg = (res.ndim == 1)
@@ -83,7 +84,7 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 
 	# make all the arguments 1 level deeper of a pointer, use thread index to choose which one at the very start, then continue through like normal
 
-	code_complex64 = """
+	code_complex128 = """
 	#pragma comment(linker, "/HEAP:40000000")
 	#include <cuComplex.h>
 	#include <stdio.h>
@@ -178,12 +179,12 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 					{
 						wrap_n = (n + argmax) %% dim;
 						best_mdl[n] = mdl[n];
-						double kr = cuCrealf(ker[n]), ki = cuCimag(ker[n]);
+						double kr = cuCreal(ker[n]), ki = cuCimag(ker[n]);
 						double realAdd = kr * stepr - ki * stepi;
 						double imagAdd = kr * stepi + ki * stepr;
 						best_res[wrap_n] = cuCadd(res[wrap_n], make_cuDoubleComplex(realAdd, imagAdd));
 					}
-					best_mdl[argmax] = cuCsubf(best_mdl[argmax], stepComplex);
+					best_mdl[argmax] = cuCsub(best_mdl[argmax], stepComplex);
 					best_score = score;
 					i = 0; // Reset maxiter counter
 				}
@@ -469,9 +470,17 @@ def clean(res, ker, mdl=None, area=None, gain=0.1, maxiter=10000, tol=1e-3, stop
 		'GAIN': gain,
 		'TOL': tol,
 	}
+	code_complex128 = code_complex128 % {
+		'DIM': dim,
+		'MAXITER': maxiter,
+		'GAIN': gain,
+		'TOL': tol,
+	}
 
 	if isComplex:
 		mod = SourceModule(code_complex, options=["-fmad=false"])
+	elif isCompelx128:
+		mod = SourceModule(code_complex128, options=["-fmad=false"])
 	else:
 		mod = SourceModule(code, options=["-fmad=false"])
 	
